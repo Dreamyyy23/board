@@ -196,18 +196,27 @@ function EntryScreen({
   onJoin: (event: FormEvent) => void;
 }) {
   const legacyCompatibility = authorityMode === "v1";
+  const v4Online = authorityMode === "v4";
   return (
     <main className="entry-screen">
       <div className="entry-table-image" />
       <div className="entry-noise" />
       <section className="entry-intro">
-        <span className="brand-kicker">A REAL-TIME FOXYVERSE TABLE</span>
+        <div
+          className={`entry-ruleset-seal${v4Online ? " is-live" : ""}`}
+          role="status"
+        >
+          <i aria-hidden="true" />
+          <span>RULESET IV</span>
+          <b>{v4Online ? "AUTHORITY ONLINE" : "SEEKING AUTHORITY"}</b>
+        </div>
+        <span className="brand-kicker">THE WATCHING TABLE · A FOXYVERSE GAME</span>
         <h1>OBSCUR</h1>
         <h2>THE SIXFOLD ROAD</h2>
         <p>
-          Six masks share one authority. Read six roads, declare your Intent,
-          Witness another cast, Bend the bone, and keep each other breathing
-          long enough to survive the Final Orbit.
+          One traveler may escape. No traveler survives alone. Read six possible
+          roads, declare your Intent, Bend the revealed bone, and decide who
+          receives your oxygen before the House reaches its third Fracture.
         </p>
         <div className="entry-objective" aria-label="Victory condition">
           <span><b>13</b> Echoes</span>
@@ -222,6 +231,14 @@ function EntryScreen({
           <span><b>03</b> Oxygen and Golden Threads</span>
           <span><b>04</b> Final Orbit before escape</span>
         </div>
+        <ol className="entry-cycle" aria-label="Ruleset four turn sequence">
+          <li><b>01</b><span>Read six outcomes</span></li>
+          <li><b>02</b><span>Choose an Intent</span></li>
+          <li><b>03</b><span>Witness the cast</span></li>
+          <li><b>04</b><span>Bend after reveal</span></li>
+          <li><b>05</b><span>Give Oxygen</span></li>
+          <li><b>06</b><span>Survive Final Orbit</span></li>
+        </ol>
       </section>
 
       <section className="entry-card">
@@ -231,18 +248,18 @@ function EntryScreen({
             {Array.from({ length: 6 }, (_, index) => <i key={index} />)}
           </div>
           <div>
-            <small>Room signal</small>
+            <small>{v4Online ? "Ruleset IV · live authority" : "Room signal"}</small>
             <h3>Take a mask</h3>
           </div>
           <span className={`connection-seal${connected ? " is-online" : ""}`}>
             <i />
-            {connected ? "FOUND" : "SEEKING"}
+            {v4Online ? "V4 LIVE" : connected ? "FOUND" : "SEEKING"}
           </span>
         </div>
         <p className="entry-card-copy">
           {legacyCompatibility
             ? "The live checkpoint currently stages a Foxy Alchemy Studio transmission on every landing."
-            : "Bind one YouTube channel to the road. Every landing makes the authority choose and stage a random public upload for the whole table."}
+            : "Every active turn now carries an informed choice, a public natural roll, a Bend window, and a chance for the other masks to intervene."}
         </p>
         {legacyCompatibility ? (
           <div className="entry-compat-notice" role="status">
@@ -310,11 +327,11 @@ function EntryScreen({
             <span>
               {legacyCompatibility
                 ? "Create Foxy compatibility table"
-                : "Bind channel & create table"}
+                : "Open a Ruleset IV table"}
               <small>
                 {legacyCompatibility
                   ? "Every landing stages one authority-selected Foxy transmission"
-                  : "Public uploads form a private room catalog; refused embeds automatically route to a different upload"}
+                  : "Six seats · 20-second authority · Witness · Oxygen · Fractures · Final Orbit"}
               </small>
             </span>
             <i aria-hidden="true">→</i>
