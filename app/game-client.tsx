@@ -15,6 +15,7 @@ import type {
 
 const SERVER_URL =
   process.env.NEXT_PUBLIC_GAME_SERVER_URL || "http://localhost:3001";
+const HTTP_AUTHORITY = SERVER_URL.endsWith("/api/authority");
 const SESSION_KEY = "obscur-sixfold-session";
 
 const MASK_PREVIEWS = [
@@ -25,6 +26,22 @@ const MASK_PREVIEWS = [
   ["MOSS", "The Hearth restores Resolve"],
   ["ASH", "Every landing calms Static"],
 ];
+
+async function requestAuthority(
+  action: string,
+  payload: Record<string, unknown> = {},
+): Promise<ServerReply> {
+  const response = await fetch(SERVER_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action, payload }),
+  });
+  const reply = (await response.json()) as ServerReply;
+  if (!response.ok && !reply.error) {
+    reply.error = "The room authority refused the request.";
+  }
+  return reply;
+}
 
 function playTone(kind: "turn" | "roll" | "error" | "collapse") {
   if (typeof window === "undefined") return;
@@ -378,6 +395,79 @@ export function GameClient() {
   const collapseRef = useRef(0);
 
   useEffect(() => {
+    if (HTTP_AUTHORITY) {
+      let stopped = false;
+      let inFlight = false;
+      let firstRequest = true;
+
+      const synchronize = async () => {
+        if (inFlight || stopped) return;
+        inFlight = true;
+        const saved = readSession();
+        const action =
+          saved && firstRequest && !saved.spectator
+            ? "join_room"
+            : saved
+              ? "get_state"
+              : "health";
+        firstRequest = false;
+        try {
+          const reply = await requestAuthority(
+            action,
+            saved
+              ? {
+                  code: saved.code,
+                  name: saved.name,
+                  token: saved.token,
+                }
+              : {},
+          );
+          if (stopped) return;
+          if (!reply.ok) {
+            if (action !== "health") {
+              setError(reply.error || "The table did not answer.");
+            }
+            if (action === "join_room") saveSession(null);
+            return;
+          }
+
+          setConnected(true);
+          setError("");
+          if (reply.state) {
+            setRoom(reply.state);
+            if (action === "join_room" && saved) {
+              const restored = {
+                ...saved,
+                token: reply.token ?? saved.token,
+                playerId: reply.playerId ?? saved.playerId,
+                spectator: reply.spectator,
+              };
+              setSession(restored);
+              saveSession(restored);
+            } else if (saved) {
+              setSession(saved);
+            }
+          }
+        } catch {
+          if (!stopped) {
+            setConnected(false);
+            setError(
+              "The room authority is offline. Reconnection will continue automatically.",
+            );
+          }
+        } finally {
+          inFlight = false;
+        }
+      };
+
+      void synchronize();
+      const interval = window.setInterval(() => void synchronize(), 900);
+      return () => {
+        stopped = true;
+        window.clearInterval(interval);
+      };
+    }
+
     const nextSocket = io(SERVER_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
@@ -502,13 +592,24 @@ export function GameClient() {
 
   function createRoom(event: FormEvent) {
     event.preventDefault();
-    const socket = socketRef.current;
-    if (!socket || !connected) {
+    if (!connected) {
       setError("The room authority has not connected yet.");
       return;
     }
     const entryName = name.trim() || "Wanderer";
     setBusy(true);
+    if (HTTP_AUTHORITY) {
+      void requestAuthority("create_room", { name: entryName })
+        .then((reply) => finishEntry(reply, entryName))
+        .catch(() => {
+          setBusy(false);
+          setConnected(false);
+          setError("The room authority is offline. Please try again.");
+        });
+      return;
+    }
+    const socket = socketRef.current;
+    if (!socket) return;
     socket.emit("create_room", { name: entryName }, (reply: ServerReply) =>
       finishEntry(reply, entryName),
     );
@@ -516,13 +617,27 @@ export function GameClient() {
 
   function joinRoom(event: FormEvent) {
     event.preventDefault();
-    const socket = socketRef.current;
-    if (!socket || !connected || !roomCode.trim()) {
+    if (!connected || !roomCode.trim()) {
       setError("Enter the five-letter room code.");
       return;
     }
     const entryName = name.trim() || "Wanderer";
     setBusy(true);
+    if (HTTP_AUTHORITY) {
+      void requestAuthority("join_room", {
+        code: roomCode.toUpperCase(),
+        name: entryName,
+      })
+        .then((reply) => finishEntry(reply, entryName))
+        .catch(() => {
+          setBusy(false);
+          setConnected(false);
+          setError("The room authority is offline. Please try again.");
+        });
+      return;
+    }
+    const socket = socketRef.current;
+    if (!socket) return;
     socket.emit(
       "join_room",
       { code: roomCode.toUpperCase(), name: entryName },
@@ -531,9 +646,33 @@ export function GameClient() {
   }
 
   function emitAction(event: string, payload: Record<string, unknown> = {}) {
-    const socket = socketRef.current;
-    if (!socket || !session) return;
+    if (!session) return;
     setBusy(true);
+    if (HTTP_AUTHORITY) {
+      void requestAuthority(event, {
+        code: session.code,
+        token: session.token,
+        ...payload,
+      })
+        .then((reply) => {
+          setBusy(false);
+          if (!reply.ok) {
+            setError(reply.error || "The table refused the move.");
+            if (sound) playTone("error");
+          } else {
+            if (reply.state) setRoom(reply.state);
+            setError("");
+          }
+        })
+        .catch(() => {
+          setBusy(false);
+          setConnected(false);
+          setError("The room authority is offline. Reconnection will continue.");
+        });
+      return;
+    }
+    const socket = socketRef.current;
+    if (!socket) return;
     socket.emit(
       event,
       { code: session.code, token: session.token, ...payload },

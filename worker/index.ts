@@ -1,6 +1,9 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+// The authority is plain ESM so the same rules engine is shared with Node.
+// @ts-expect-error JavaScript worker module without a declaration file.
+import { handleAuthorityRequest } from "../server/http-authority.mjs";
 
 interface Env {
   ASSETS: Fetcher;
@@ -28,6 +31,10 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/authority") {
+      return handleAuthorityRequest(request, env);
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
