@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Alegreya_Sans, Cinzel, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./entity-v5.css";
 
 const cinzel = Cinzel({
   variable: "--font-display",

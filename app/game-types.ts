@@ -9,7 +9,12 @@ export type GameEvent = {
   title: string;
   body: string;
   tone: string;
+  transmissionId?: string;
+  transmissionStartedAt?: number;
   landingSeat?: number;
+  landingSpace?: number;
+  eventId?: string;
+  eventTitle?: string;
   deltaEchoes?: number;
   deltaKeys?: number;
   deltaFocus?: number;
@@ -19,10 +24,31 @@ export type GameEvent = {
   relic?: string;
   videoId?: string;
   videoUrl?: string;
+  videoTitle?: string;
   videoLabel?: string;
   videoSource?: string;
+  channelId?: string | null;
   channelUrl?: string;
+  channelBrand?: ChannelBrand;
   choices?: Choice[];
+};
+
+export type ChannelBrand =
+  | "obscur"
+  | "signal"
+  | "inkblot"
+  | "fateweaver"
+  | "chromed"
+  | "chromed-sakura";
+
+export type YoutubeChannel = {
+  id: string | null;
+  title: string;
+  handle: string | null;
+  url: string;
+  brand: ChannelBrand;
+  videoCount: number;
+  source: string;
 };
 
 export type Mask = {
@@ -92,6 +118,7 @@ export type RoomState = {
   signalMax: number;
   collapseCount: number;
   hazard: { id: string; title: string; body: string; at: number } | null;
+  activeTransmission: GameEvent | null;
   lastEvent: GameEvent;
   lastRoll: {
     seat: number;
@@ -104,6 +131,7 @@ export type RoomState = {
   winnerSeat: number | null;
   log: Array<{ id: string; at: number; text: string }>;
   objective: { echoes: number; keys: number; laps: number };
+  youtubeChannel: YoutubeChannel;
 };
 
 export type Session = {

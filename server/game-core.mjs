@@ -39,8 +39,57 @@ export const FOXY_ALCHEMY_VIDEOS = [
   "P0K9JuzErCs",
 ];
 
+export const FOXY_ALCHEMY_TITLES = {
+  _agqpz2GSOc: "SABLE-3 team enters the game",
+  M49MuTZDquE: "the cartographers error",
+  gMP0D9mxKJs: "Beyond — imagination changes reality",
+  _oZ9zKfxEQM: "FOXY MUSIC — COMPILATION VOL. 2",
+  xSvtwuttpqc: "en el principio",
+  z7WtUwLvI7o: "FOXY music compilation — Volume 1",
+  fTf_9w_48Io: "gang the horror",
+  SnM5oGxI8Lo: "PAKISTAN #1",
+  "37waC24B5r4": "a choice",
+  W5sy5X2yZUo: "DJ Houseplants — Was Lost and You Found Me",
+  XI6JGxB4AJw: "look gang, a door",
+  "mn-N6mpApUg": "2026 07 20 20 52 25",
+  lKg3zxJNjSs: "Pi (1998) — imagination and reality",
+  vY76SBsFENw: "derealization",
+  bMDNU1fipuo: "Video Project 10",
+  MhkEyOgui4Y: "2026 07 20 14 05 33",
+  FARmToPqgqo: "nyancat (the original)",
+  tPyHWmISZ4w: "choice C",
+  up2SWzvgIQM: "2026 07 20 11 11 13",
+  BKHsKLYyh4I: "2026 07 20 10 20 23",
+  ZhTD2dbkj_A: "tenha fé",
+  "4NgEBJnHEJI": "my greatest fear come true",
+  t0FEoTaLHLo: "platform zero",
+  SMUl3rXf9JU: "Video Project 8",
+  "5jwt1PEfvZA": "videoplayback",
+  pi_iN1vA6p4: "Foxyverse Trailer",
+  "1MDU-G6EHDU": "Ghost in the Shell — human and machine",
+  rSQIVSKlAbU: "2026 07 18 23 11 40",
+  PiQd492oxLE: "kiss me hug me",
+  P0K9JuzErCs: "Lucky People Center International",
+};
+
 const FOXY_ALCHEMY_CHANNEL =
   "https://www.youtube.com/@FoxyAlchemyStudio";
+
+export const DEFAULT_YOUTUBE_CHANNEL = {
+  id: "UCZwB5nNajRIg07bpSMMTlgg",
+  title: "Foxy Alchemy Studio",
+  handle: "@FoxyAlchemyStudio",
+  url: FOXY_ALCHEMY_CHANNEL,
+  brand: "obscur",
+  source: "bundled",
+  fetchedAt: 0,
+  videos: FOXY_ALCHEMY_VIDEOS.map((id, index) => ({
+    id,
+    title:
+      FOXY_ALCHEMY_TITLES[id] ||
+      `Foxy Alchemy transmission ${String(index + 1).padStart(2, "0")}`,
+  })),
+};
 
 export const MASKS = [
   {
@@ -186,11 +235,9 @@ const EVENTS = {
       id: "borrowed-summer",
       title: "The Borrowed Summer",
       body:
-        "A voluntary transmission waits inside the cabinet. Playback is never automatic and does not change the roll.",
+        "The cabinet opens by itself. Its assigned transmission takes the room while one Echo escapes through the hinge.",
       tone: "signal",
       deltaEchoes: 1,
-      videoUrl: "https://www.youtube.com/watch?v=TdrL3QxjyVw",
-      videoLabel: "Open the archived transmission",
     },
     {
       id: "frequency-seven",
@@ -420,10 +467,19 @@ export function createCode(existing = new Set()) {
   throw new Error("Could not allocate a room code.");
 }
 
-export function createRoom(code, now = Date.now()) {
+export function createRoom(
+  code,
+  now = Date.now(),
+  youtubeChannel = DEFAULT_YOUTUBE_CHANNEL,
+) {
+  const channel = clone(youtubeChannel || DEFAULT_YOUTUBE_CHANNEL);
+  if (!Array.isArray(channel.videos) || channel.videos.length === 0) {
+    throw new Error("The selected channel has no public playable videos.");
+  }
   return {
     code,
     createdAt: now,
+    youtubeChannel: channel,
     status: "lobby",
     hostToken: null,
     players: Array(MAX_PLAYERS).fill(null),
@@ -436,6 +492,8 @@ export function createRoom(code, now = Date.now()) {
     signal: 2,
     collapseCount: 0,
     hazard: null,
+    activeTransmission: null,
+    transmissionRecovery: null,
     lastEvent: {
       id: "table-wakes",
       title: "The Table Wakes",
@@ -569,6 +627,8 @@ export function beginGame(room, actorToken, now = Date.now()) {
   room.signal = 2;
   room.collapseCount = 0;
   room.hazard = null;
+  room.activeTransmission = null;
+  room.transmissionRecovery = null;
   room.lastEvent = {
     id: "first-turn",
     title: "The Road Opens",
@@ -579,27 +639,174 @@ export function beginGame(room, actorToken, now = Date.now()) {
   return room;
 }
 
-function transmissionFor(rng = Math.random) {
-  const index = Math.min(
-    FOXY_ALCHEMY_VIDEOS.length - 1,
-    Math.floor(rng() * FOXY_ALCHEMY_VIDEOS.length),
-  );
-  const videoId = FOXY_ALCHEMY_VIDEOS[index];
+function roomChannel(room) {
+  const channel = room.youtubeChannel || DEFAULT_YOUTUBE_CHANNEL;
+  if (!Array.isArray(channel.videos) || channel.videos.length === 0) {
+    throw new Error("This table's channel has no public playable videos.");
+  }
+  return channel;
+}
+
+function transmissionFields(event) {
   return {
-    videoId,
-    videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    videoLabel: "Open the assigned Foxy Alchemy transmission",
-    videoSource: "Foxy Alchemy Studio",
-    channelUrl: FOXY_ALCHEMY_CHANNEL,
+    transmissionId: event.transmissionId,
+    transmissionStartedAt: event.transmissionStartedAt,
+    videoId: event.videoId,
+    videoUrl: event.videoUrl,
+    videoTitle: event.videoTitle,
+    videoLabel: event.videoLabel,
+    videoSource: event.videoSource,
+    channelId: event.channelId,
+    channelUrl: event.channelUrl,
+    channelBrand: event.channelBrand,
   };
 }
 
-function chooseEvent(kind, rng = Math.random) {
+function setActiveTransmission(room, event, player, now) {
+  room.activeTransmission = {
+    ...transmissionFields(event),
+    id: `transmission-${event.transmissionId}`,
+    title: event.videoTitle || event.title,
+    body: event.body,
+    tone: event.tone,
+    landingSeat: player.seat,
+    landingSpace: player.position,
+    eventId: event.id,
+    eventTitle: event.title,
+    transmissionStartedAt: event.transmissionStartedAt || now,
+  };
+  room.transmissionRecovery = {
+    transmissionId: event.transmissionId,
+    attemptedVideoIds: [event.videoId],
+  };
+  return room.activeTransmission;
+}
+
+function replaceTransmissionFields(target, transmission) {
+  if (!target) return;
+  Object.assign(target, transmissionFields(transmission));
+}
+
+/**
+ * Replaces a YouTube transmission rejected by the embedded player without
+ * resolving the landing a second time. The room keeps the attempted IDs
+ * private, so a client can request failover without receiving the catalog.
+ */
+export function retryTransmission(
+  room,
+  failedTransmissionId,
+  failedVideoId,
+  options = {},
+) {
+  const active = room.activeTransmission;
+  if (!active?.transmissionId || !active.videoId) {
+    throw new Error("No landing transmission is active.");
+  }
+  if (
+    active.transmissionId !== failedTransmissionId ||
+    active.videoId !== failedVideoId
+  ) {
+    throw new Error("That transmission has already moved to another signal.");
+  }
+
+  const channel = roomChannel(room);
+  const recovery =
+    room.transmissionRecovery?.transmissionId === failedTransmissionId
+      ? room.transmissionRecovery
+      : {
+          transmissionId: failedTransmissionId,
+          attemptedVideoIds: [failedVideoId],
+        };
+  const attempted = new Set([
+    ...recovery.attemptedVideoIds,
+    failedVideoId,
+  ]);
+  const candidates = channel.videos.filter((video) => {
+    const id = typeof video === "string" ? video : video.id;
+    return id && !attempted.has(id);
+  });
+  if (candidates.length === 0) {
+    throw new Error("Every available channel transmission was rejected.");
+  }
+
+  const rng = options.rng ?? Math.random;
+  const now = options.now ?? Date.now();
+  const index = Math.min(
+    candidates.length - 1,
+    Math.floor(rng() * candidates.length),
+  );
+  const video = candidates[index];
+  const videoId = typeof video === "string" ? video : video.id;
+  const videoTitle =
+    typeof video === "string" ? "Assigned channel transmission" : video.title;
+  const next = {
+    ...active,
+    transmissionId: crypto.randomUUID(),
+    transmissionStartedAt: now,
+    videoId,
+    videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    videoTitle: videoTitle || "Assigned channel transmission",
+    title: videoTitle || "Assigned channel transmission",
+  };
+
+  room.activeTransmission = next;
+  room.transmissionRecovery = {
+    transmissionId: next.transmissionId,
+    attemptedVideoIds: [...attempted, videoId],
+  };
+
+  if (room.lastEvent?.transmissionId === failedTransmissionId) {
+    replaceTransmissionFields(room.lastEvent, next);
+  }
+  if (
+    room.pendingChoice?.event?.transmissionId === failedTransmissionId
+  ) {
+    replaceTransmissionFields(room.pendingChoice.event, next);
+  }
+  if (
+    room.pendingCouncil?.event?.transmissionId === failedTransmissionId
+  ) {
+    replaceTransmissionFields(room.pendingCouncil.event, next);
+  }
+
+  appendLog(
+    room,
+    `The receiver rejected one upload. The table routed another transmission from ${channel.title || "its channel"}.`,
+    now,
+  );
+  return next;
+}
+
+function transmissionFor(room, rng = Math.random, now = Date.now()) {
+  const channel = roomChannel(room);
+  const index = Math.min(
+    channel.videos.length - 1,
+    Math.floor(rng() * channel.videos.length),
+  );
+  const video = channel.videos[index];
+  const videoId = typeof video === "string" ? video : video.id;
+  const videoTitle =
+    typeof video === "string" ? "Assigned channel transmission" : video.title;
+  return {
+    transmissionId: crypto.randomUUID(),
+    transmissionStartedAt: now,
+    videoId,
+    videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
+    videoTitle: videoTitle || "Assigned channel transmission",
+    videoLabel: "Now broadcasting from the table's channel",
+    videoSource: channel.title || "YouTube",
+    channelId: channel.id || null,
+    channelUrl: channel.url,
+    channelBrand: channel.brand || "obscur",
+  };
+}
+
+function chooseEvent(room, kind, rng = Math.random, now = Date.now()) {
   const list = EVENTS[kind] || EVENTS.echo;
   const event = clone(list[Math.floor(rng() * list.length)]);
   return {
     ...event,
-    ...transmissionFor(rng),
+    ...transmissionFor(room, rng, now),
   };
 }
 
@@ -729,7 +936,7 @@ function occupiedSeats(room) {
 function openCouncil(room, player, now, rng = Math.random) {
   const event = {
     ...clone(COUNCIL_EVENT),
-    ...transmissionFor(rng),
+    ...transmissionFor(room, rng, now),
     landingSeat: player.seat,
   };
   const votes = {};
@@ -742,6 +949,7 @@ function openCouncil(room, player, now, rng = Math.random) {
     votes,
   };
   room.lastEvent = event;
+  setActiveTransmission(room, event, player, now);
   room.deadline = now + TURN_MS;
   player.statistics.council += 1;
   appendLog(room, `${player.name} called the Sixfold Council.`, now);
@@ -787,11 +995,7 @@ export function resolveCouncil(room, now = Date.now(), fillMissing = false) {
   const choice = council.event.choices.find((candidate) => candidate.id === winner);
   room.lastEvent = {
     landingSeat: council.event.landingSeat,
-    videoId: council.event.videoId,
-    videoUrl: council.event.videoUrl,
-    videoLabel: council.event.videoLabel,
-    videoSource: council.event.videoSource,
-    channelUrl: council.event.channelUrl,
+    ...transmissionFields(council.event),
     id: `council-${winner}`,
     title: `Council: ${choice.label}`,
     body: choice.result,
@@ -912,8 +1116,9 @@ export function rollTurn(room, actorToken, options = {}) {
     return { die, event: room.lastEvent, council: true };
   }
 
-  const event = chooseEvent(kind, rng);
+  const event = chooseEvent(room, kind, rng, now);
   event.landingSeat = player.seat;
+  setActiveTransmission(room, event, player, now);
   applyMaskPassive(room, player, kind, event);
   room.lastEvent = event;
   progressVow(room, player, kind);
@@ -934,11 +1139,7 @@ export function rollTurn(room, actorToken, options = {}) {
     room.deadline = null;
     room.lastEvent = {
       landingSeat: event.landingSeat,
-      videoId: event.videoId,
-      videoUrl: event.videoUrl,
-      videoLabel: event.videoLabel,
-      videoSource: event.videoSource,
-      channelUrl: event.channelUrl,
+      ...transmissionFields(event),
       id: "road-names-winner",
       title: "The Road Speaks a Name",
       body: `${player.name} returned with ${player.echoes} Echoes, an Alabaster Key, and the ${player.sigil} mask.`,
@@ -1065,10 +1266,20 @@ export function publicRoom(room, now = Date.now()) {
     signalMax: SIGNAL_MAX,
     collapseCount: room.collapseCount,
     hazard: room.hazard,
+    activeTransmission: room.activeTransmission || null,
     lastEvent: room.lastEvent,
     lastRoll: room.lastRoll,
     winnerSeat: room.winnerSeat,
     log: room.log,
     objective: { echoes: WIN_ECHOES, keys: 1, laps: 1 },
+    youtubeChannel: {
+      id: roomChannel(room).id || null,
+      title: roomChannel(room).title || "YouTube",
+      handle: roomChannel(room).handle || null,
+      url: roomChannel(room).url,
+      brand: roomChannel(room).brand || "obscur",
+      videoCount: roomChannel(room).videos.length,
+      source: roomChannel(room).source || "resolved",
+    },
   };
 }

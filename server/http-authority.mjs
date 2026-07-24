@@ -11,11 +11,13 @@ import {
   reconnectPlayer,
   removeBot,
   resolveCouncil,
+  retryTransmission,
   rollTurn,
   seatPlayer,
   tuneRoll,
   useRelic as activateRelic,
 } from "./game-core.mjs";
+import { resolveRoomChannel } from "./room-channel.mjs";
 
 const ROOM_TTL = 24 * 60 * 60_000;
 const BOT_NAMES = ["Moth", "North", "Palanca", "Alabaster", "Static", "Lantern"];
@@ -118,30 +120,30 @@ async function saveRoom(db, room, version, now) {
   return version + 1;
 }
 
-function settleRoom(room, now) {
-  let changed = false;
-  for (let pass = 0; pass < 12; pass += 1) {
-    if (room.status !== "playing") break;
-    const active = room.players[room.currentSeat];
-    const expired = room.deadline && now >= room.deadline;
-    const botTurn = Boolean(active?.bot);
-    if (!expired && !botTurn) break;
+export function settleRoom(room, now) {
+  if (room.status !== "playing") return false;
 
-    if (room.pendingCouncil) {
-      if (!expired) break;
-      resolveCouncil(room, now, true);
-    } else if (room.pendingChoice) {
-      if (!expired && !room.players[room.pendingChoice.seat]?.bot) break;
-      answerChoice(room, null, room.pendingChoice.event.choices[0].id, {
-        automated: true,
-        now,
-      });
-    } else {
-      rollTurn(room, null, { automated: true, now });
-    }
-    changed = true;
+  const active = room.players[room.currentSeat];
+  const expired = Boolean(room.deadline && now >= room.deadline);
+  const botTurn = Boolean(active?.bot);
+  if (!expired && !botTurn) return false;
+
+  if (room.pendingCouncil) {
+    if (!expired) return false;
+    resolveCouncil(room, now, true);
+  } else if (room.pendingChoice) {
+    if (!expired && !room.players[room.pendingChoice.seat]?.bot) return false;
+    answerChoice(room, null, room.pendingChoice.event.choices[0].id, {
+      automated: true,
+      now,
+    });
+  } else {
+    // Resolve only one landing per request. The HTTP client polls for the next
+    // canonical snapshot, so advancing through several bots here would replace
+    // intermediate activeTransmission values before any client could stage them.
+    rollTurn(room, null, { automated: true, now });
   }
-  return changed;
+  return true;
 }
 
 function requireRoom(loaded) {
@@ -149,10 +151,14 @@ function requireRoom(loaded) {
   return loaded;
 }
 
-async function createNewRoom(db, name, now) {
+async function createNewRoom(db, name, youtubeChannelUrl, now, env) {
+  const youtubeChannel = await resolveRoomChannel(youtubeChannelUrl, {
+    apiKey: env.YOUTUBE_API_KEY,
+    now,
+  });
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const code = createCode();
-    const room = createRoom(code, now);
+    const room = createRoom(code, now, youtubeChannel);
     const player = seatPlayer(room, { name });
     try {
       await insertRoom(db, room, now);
@@ -170,18 +176,43 @@ async function createNewRoom(db, name, now) {
   throw new Error("The table could not find a free signal.");
 }
 
-async function runAction(db, action, payload, now) {
+async function runAction(db, action, payload, now, env) {
   if (action === "health") {
-    return { ok: true, protocol: "sixfold-road-http-v1" };
+    return {
+      ok: true,
+      protocol: "sixfold-road-http-v2",
+      channelInput: true,
+      youtubeApiConfigured: Boolean(env.YOUTUBE_API_KEY),
+    };
   }
   if (action === "create_room") {
-    return createNewRoom(db, payload.name, now);
+    return createNewRoom(
+      db,
+      payload.name,
+      payload.youtubeChannelUrl,
+      now,
+      env,
+    );
   }
 
   const code = String(payload.code || "").toUpperCase().trim();
   const loaded = requireRoom(await loadRoom(db, code));
   const { room } = loaded;
   let version = loaded.version;
+
+  // A receiver error refers to the currently staged landing. Route it before
+  // automatic bot settlement has a chance to replace that transmission.
+  if (action === "reject_transmission") {
+    retryTransmission(
+      room,
+      String(payload.transmissionId || ""),
+      String(payload.videoId || ""),
+      { now },
+    );
+    version = await saveRoom(db, room, version, now);
+    return { ok: true, code, state: publicRoom(room, now), version };
+  }
+
   const settled = settleRoom(room, now);
 
   if (action === "get_state") {
@@ -301,6 +332,7 @@ export async function handleAuthorityRequest(request, env) {
       String(body.action || ""),
       body.payload || {},
       Date.now(),
+      env,
     );
     return json(request, result);
   } catch (error) {

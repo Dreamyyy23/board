@@ -14,11 +14,13 @@ import {
   reconnectPlayer,
   removeBot,
   resolveCouncil,
+  retryTransmission,
   rollTurn,
   seatPlayer,
   tuneRoll,
   useRelic,
 } from "./game-core.mjs";
+import { resolveRoomChannel } from "./room-channel.mjs";
 
 const PORT = Number(process.env.GAME_PORT || 3001);
 const rooms = new Map();
@@ -29,7 +31,13 @@ const server = http.createServer((request, response) => {
   if (request.url === "/health") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
-      JSON.stringify({ ok: true, rooms: rooms.size, protocol: "sixfold-road-v2" }),
+      JSON.stringify({
+        ok: true,
+        rooms: rooms.size,
+        protocol: "sixfold-road-v3",
+        channelInput: true,
+        youtubeApiConfigured: Boolean(process.env.YOUTUBE_API_KEY),
+      }),
     );
     return;
   }
@@ -40,7 +48,7 @@ const server = http.createServer((request, response) => {
 const allowedOrigins = new Set(
   (
     process.env.CLIENT_ORIGINS ||
-    "http://localhost:3000,http://127.0.0.1:3000"
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:4175,http://127.0.0.1:4175,https://dreamyyy23.github.io"
   )
     .split(",")
     .map((value) => value.trim()),
@@ -111,10 +119,14 @@ io.on("connection", (socket) => {
     turnMs: TURN_MS,
   });
 
-  socket.on("create_room", (payload = {}, callback) => {
+  socket.on("create_room", async (payload = {}, callback) => {
     try {
+      const youtubeChannel = await resolveRoomChannel(
+        payload.youtubeChannelUrl,
+        { apiKey: process.env.YOUTUBE_API_KEY },
+      );
       const code = createCode(new Set(rooms.keys()));
-      const room = createRoom(code);
+      const room = createRoom(code, Date.now(), youtubeChannel);
       rooms.set(code, room);
       const player = seatPlayer(room, {
         name: payload.name,
@@ -255,6 +267,26 @@ io.on("connection", (socket) => {
       callback?.({ ok: true });
       emitRoom(room);
       scheduleBot(room);
+    } catch (error) {
+      callbackError(callback, error);
+    }
+  });
+
+  socket.on("reject_transmission", (payload = {}, callback) => {
+    try {
+      const membership = socketMembership.get(socket.id);
+      const room = rooms.get(payload.code);
+      if (!room || membership?.roomCode !== room.code) {
+        throw new Error("The table is gone.");
+      }
+      retryTransmission(
+        room,
+        String(payload.transmissionId || ""),
+        String(payload.videoId || ""),
+      );
+      const state = publicRoom(room);
+      callback?.({ ok: true, state });
+      emitRoom(room);
     } catch (error) {
       callbackError(callback, error);
     }

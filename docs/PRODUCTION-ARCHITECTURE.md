@@ -69,10 +69,16 @@ rooms can later add an invite secret or a keeper approval queue.
 
 ## Video event rule
 
-Archive spaces return metadata for an optional external transmission. The game
-must not autoplay, hide, background, loop, or reward third-party playback.
-Progression is resolved by the board event independently of whether the player
-opens the link.
+Room creation binds one public YouTube channel. Every landing selects one
+catalogued video on the authority and broadcasts the same assignment to the
+table. The client may attempt visible autoplay after the player's room/roll
+gesture, while preserving native pause, mute, captions, fullscreen, branding,
+and controls. A blocked browser receives an adjacent start control.
+
+The player remains at least 200 by 200 pixels, stays predominantly visible,
+and is never covered by game art. Only one YouTube player is mounted per client.
+Progression resolves independently of playback; pausing, completion, watch
+duration, likes, and subscriptions never change rewards or victory.
 
 ## Deployment sequence
 

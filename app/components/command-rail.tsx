@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Player, RoomState } from "../game-types";
 import { MaskPortrait } from "./mask-portrait";
+import { TransmissionStage } from "./transmission-stage";
 
 function Pips({
   value,
@@ -38,6 +39,7 @@ export function CommandRail({
   onTune,
   onUseRelic,
   onGift,
+  onTransmissionFailure,
 }: {
   room: RoomState;
   self: Player | null;
@@ -50,6 +52,11 @@ export function CommandRail({
   onTune: (amount: number) => void;
   onUseRelic: (id: string) => void;
   onGift: (seat: number) => void;
+  onTransmissionFailure: (failure: {
+    transmissionId: string;
+    videoId: string;
+    errorCode: number;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [tab, setTab] = useState<"event" | "chronicle">("event");
   const [tacticsOpen, setTacticsOpen] = useState(false);
@@ -57,10 +64,16 @@ export function CommandRail({
   const choiceIsMine = room.pendingChoice?.seat === self?.seat;
   const council = room.pendingCouncil;
   const event = council?.event || room.pendingChoice?.event || room.lastEvent;
+  const transmission = room.activeTransmission;
   const seconds = room.secondsLeft ?? 20;
   const progress = Math.max(0, Math.min(100, (seconds / 20) * 100));
   const currentPlayer =
     room.currentSeat === null ? null : room.players[room.currentSeat];
+  const landingPlayer =
+    transmission?.landingSeat === undefined
+      ? null
+      : room.players[transmission.landingSeat]?.name ||
+        `Mask ${transmission.landingSeat + 1}`;
   const alreadyVoted = Boolean(
     council && self && council.votes[self.seat],
   );
@@ -110,6 +123,17 @@ export function CommandRail({
           </span>
         </div>
       </div>
+
+      <TransmissionStage
+        event={transmission}
+        landingPlayer={landingPlayer}
+        onPlaybackFailure={onTransmissionFailure}
+        spaceLabel={
+          transmission?.landingSpace !== undefined
+            ? `space ${String(transmission.landingSpace + 1).padStart(2, "0")}`
+            : null
+        }
+      />
 
       <div className="rail-tabs">
         <button
@@ -162,27 +186,19 @@ export function CommandRail({
             </div>
           )}
 
-          {event.videoUrl && (
-            <a
-              className="transmission-link"
-              href={event.videoUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {event.videoId && (
-                // The thumbnail is selected at runtime by the game authority.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt=""
-                  src={`https://i.ytimg.com/vi/${event.videoId}/mqdefault.jpg`}
-                />
-              )}
-              <span className="transmission-play">▶</span>
-              <div>
-                <b>{event.videoLabel || "Open transmission"}</b>
-                <small>{event.videoSource || "YouTube"} · voluntary playback</small>
-              </div>
-            </a>
+          {transmission?.videoId && (
+            <div className="transmission-assignment">
+              <span>Authority-selected channel broadcast</span>
+              <b>
+                {transmission.videoTitle ||
+                  transmission.videoLabel ||
+                  "Assigned transmission"}
+              </b>
+              <small>
+                {transmission.videoSource || room.youtubeChannel.title} · now
+                staged for the whole table
+              </small>
+            </div>
           )}
 
           {event.choices && room.pendingChoice && (

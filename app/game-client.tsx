@@ -6,17 +6,44 @@ import { Board } from "./components/board";
 import { CommandRail } from "./components/command-rail";
 import { MaskPortrait } from "./components/mask-portrait";
 import { SeatRail } from "./components/seat-rail";
-import type {
-  GameEvent,
-  RoomState,
-  ServerReply,
-  Session,
-} from "./game-types";
+import type { RoomState, ServerReply, Session } from "./game-types";
 
 const SERVER_URL =
   process.env.NEXT_PUBLIC_GAME_SERVER_URL || "http://localhost:3001";
 const HTTP_AUTHORITY = SERVER_URL.endsWith("/api/authority");
 const SESSION_KEY = "obscur-sixfold-session";
+const DEFAULT_CHANNEL_URL = "https://www.youtube.com/@FoxyAlchemyStudio";
+
+const CREATOR_CHANNELS = [
+  {
+    id: "obscur",
+    name: "Foxy Alchemy",
+    handle: "@FoxyAlchemyStudio",
+    url: DEFAULT_CHANNEL_URL,
+    motif: "The original signal",
+  },
+  {
+    id: "inkblot",
+    name: "Margaret",
+    handle: "@MargaretWorldFoxy",
+    url: "https://www.youtube.com/@MargaretWorldFoxy",
+    motif: "Inkblot / ivory / ember",
+  },
+  {
+    id: "fateweaver",
+    name: "Fada",
+    handle: "@EleanorJames09",
+    url: "https://www.youtube.com/@EleanorJames09",
+    motif: "Gold thread / cyan / black",
+  },
+  {
+    id: "chromed-sakura",
+    name: "Melody",
+    handle: "@MelodySakura-x",
+    url: "https://www.youtube.com/@MelodySakura-x",
+    motif: "Chrome / sakura / signal",
+  },
+] as const;
 
 const MASK_PREVIEWS = [
   ["EMBER", "Echoes burn brighter"],
@@ -99,8 +126,10 @@ function EntryScreen({
   error,
   name,
   roomCode,
+  youtubeChannelUrl,
   onName,
   onRoomCode,
+  onYoutubeChannelUrl,
   onCreate,
   onJoin,
 }: {
@@ -109,8 +138,10 @@ function EntryScreen({
   error: string;
   name: string;
   roomCode: string;
+  youtubeChannelUrl: string;
   onName: (value: string) => void;
   onRoomCode: (value: string) => void;
+  onYoutubeChannelUrl: (value: string) => void;
   onCreate: (event: FormEvent) => void;
   onJoin: (event: FormEvent) => void;
 }) {
@@ -127,6 +158,13 @@ function EntryScreen({
           survive the Static, and return to the Hearth carrying thirteen
           Echoes and an Alabaster Key.
         </p>
+        <div className="entry-objective" aria-label="Victory condition">
+          <span><b>13</b> Echoes</span>
+          <i aria-hidden="true" />
+          <span><b>1</b> Alabaster Key</span>
+          <i aria-hidden="true" />
+          <span><b>1</b> Full Circuit</span>
+        </div>
         <div className="entry-laws">
           <span><b>01</b> Twenty-second turns</span>
           <span><b>02</b> One server-owned die</span>
@@ -150,6 +188,11 @@ function EntryScreen({
             {connected ? "FOUND" : "SEEKING"}
           </span>
         </div>
+        <p className="entry-card-copy">
+          Bind one YouTube channel to the road. Every landing makes the
+          authority choose and stage a random public upload for the whole
+          table.
+        </p>
 
         <form onSubmit={onCreate}>
           <label>
@@ -161,9 +204,54 @@ function EntryScreen({
               autoComplete="nickname"
             />
           </label>
+          <fieldset className="channel-terminal">
+            <legend>
+              <span>Channel bound to this room</span>
+              <small>Resolved once, drawn by the authority on every landing</small>
+            </legend>
+            <div className="channel-presets">
+              {CREATOR_CHANNELS.map((channel) => {
+                const selected = youtubeChannelUrl === channel.url;
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className={`channel-preset channel-preset--${channel.id}${selected ? " is-selected" : ""}`}
+                    key={channel.id}
+                    onClick={() => onYoutubeChannelUrl(channel.url)}
+                    type="button"
+                  >
+                    <i aria-hidden="true" />
+                    <span>
+                      <b>{channel.name}</b>
+                      <small>{channel.handle}</small>
+                    </span>
+                    <em>{channel.motif}</em>
+                  </button>
+                );
+              })}
+            </div>
+            <label className="channel-url-field">
+              <span>YouTube channel URL</span>
+              <input
+                inputMode="url"
+                onChange={(event) => onYoutubeChannelUrl(event.target.value)}
+                placeholder="https://www.youtube.com/@yourchannel"
+                required
+                type="url"
+                value={youtubeChannelUrl}
+              />
+            </label>
+          </fieldset>
           <button className="entry-primary" disabled={!connected || busy} type="submit">
-            <span>Create a private table</span>
-            <small>Receive a five-letter signal and the keeper’s authority</small>
+            <b aria-hidden="true">◆</b>
+            <span>
+              Bind channel &amp; create table
+              <small>
+                Public uploads form a private room catalog; refused embeds
+                automatically route to a different upload
+              </small>
+            </span>
+            <i aria-hidden="true">→</i>
           </button>
         </form>
 
@@ -192,16 +280,27 @@ function EntryScreen({
 
         {error && <p className="entry-error" role="status">{error}</p>}
         <p className="entry-privacy">
-          Reconnect tokens remain on your device. Archive transmissions are
-          voluntary, open separately, and never affect rewards.
+          The receiver attempts each authority-selected transmission
+          immediately. If the browser requires a gesture, one start control
+          appears beside it. Watch duration never changes rewards.
         </p>
+        <div className="entry-assurances" aria-label="Room properties">
+          <span>No account</span>
+          <span>Six seats</span>
+          <span>24-hour signal</span>
+        </div>
       </section>
 
       <section className="entry-mask-strip" aria-label="The six playable masks">
+        <header>
+          <span>The masks waiting</span>
+          <small>Choose a law before the first cast</small>
+        </header>
         {MASK_PREVIEWS.map(([name, passive], index) => (
           <article key={name}>
             <MaskPortrait seat={index} />
             <div>
+              <small>{String(index + 1).padStart(2, "0")}</small>
               <strong>{name}</strong>
               <span>{passive}</span>
             </div>
@@ -276,7 +375,7 @@ function RulesModal({
           <article>
             <span>TRANSMISSION</span>
             <h3>Every landing broadcasts</h3>
-            <p>Every resolved space draws one Foxy Alchemy Studio video. Playback is an explicit choice and never changes rewards.</p>
+            <p>Every resolved space draws one public upload from the room&apos;s bound channel and stages it for every player and spectator. Rejected embeds fail forward.</p>
           </article>
         </div>
 
@@ -304,79 +403,6 @@ function RulesModal({
   );
 }
 
-function TransmissionModal({
-  event,
-  onClose,
-}: {
-  event: GameEvent;
-  onClose: () => void;
-}) {
-  if (!event.videoUrl) return null;
-  return (
-    <div className="transmission-backdrop" role="presentation">
-      <section
-        aria-labelledby="transmission-title"
-        aria-modal="true"
-        className="transmission-modal"
-        role="dialog"
-      >
-        <div className="transmission-scanline" />
-        <header>
-          <span>LANDING TRANSMISSION</span>
-          <b>FOX ALCHEMY STUDIO · RANDOM DRAW</b>
-        </header>
-        <div className="transmission-visual">
-          {event.videoId && (
-            // The landing selects an external YouTube thumbnail at runtime.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt="Assigned Foxy Alchemy Studio video thumbnail"
-              src={`https://i.ytimg.com/vi/${event.videoId}/hqdefault.jpg`}
-            />
-          )}
-          <div className="transmission-frequency">
-            <i />
-            <span>YT</span>
-          </div>
-        </div>
-        <div className="transmission-copy">
-          <small>The space has chosen a broadcast</small>
-          <h2 id="transmission-title">{event.title}</h2>
-          <p>
-            This transmission is attached to the landing, but watching it is
-            your choice and does not alter Echoes, movement, or victory.
-          </p>
-        </div>
-        <div className="transmission-actions">
-          <a
-            href={event.videoUrl}
-            onClick={onClose}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <span>▶</span>
-            Open on YouTube
-            <small>Foxy Alchemy Studio</small>
-          </a>
-          <button onClick={onClose} type="button">
-            Continue without playback
-          </button>
-        </div>
-        {event.channelUrl && (
-          <a
-            className="transmission-channel"
-            href={event.channelUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
-            Visit the channel
-          </a>
-        )}
-      </section>
-    </div>
-  );
-}
-
 export function GameClient() {
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -384,13 +410,14 @@ export function GameClient() {
   const [session, setSession] = useState<Session | null>(null);
   const [name, setName] = useState("Wanderer");
   const [roomCode, setRoomCode] = useState("");
+  const [youtubeChannelUrl, setYoutubeChannelUrl] = useState(
+    DEFAULT_CHANNEL_URL,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sound, setSound] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [transmissionOpen, setTransmissionOpen] = useState(false);
   const lastRollRef = useRef<string>("");
-  const transmissionRef = useRef<string>("");
   const lastTurnRef = useRef<number | null>(null);
   const collapseRef = useRef(0);
 
@@ -524,26 +551,6 @@ export function GameClient() {
   );
 
   useEffect(() => {
-    if (
-      !room?.lastRoll ||
-      !room.lastEvent.videoUrl ||
-      self?.seat !== room.lastEvent.landingSeat
-    ) {
-      return;
-    }
-    const transmissionKey = [
-      room.lastEvent.landingSeat,
-      room.lastRoll.from,
-      room.lastRoll.to,
-      room.lastRoll.naturalDie,
-      room.lastEvent.videoId,
-    ].join(":");
-    if (transmissionRef.current === transmissionKey) return;
-    transmissionRef.current = transmissionKey;
-    setTransmissionOpen(true);
-  }, [room?.lastRoll, room?.lastEvent, self?.seat]);
-
-  useEffect(() => {
     if (!room?.lastRoll || !sound) return;
     const rollKey = `${room.turnNumber}-${room.lastRoll.seat}-${room.lastRoll.die}`;
     if (lastRollRef.current && lastRollRef.current !== rollKey) playTone("roll");
@@ -599,7 +606,10 @@ export function GameClient() {
     const entryName = name.trim() || "Wanderer";
     setBusy(true);
     if (HTTP_AUTHORITY) {
-      void requestAuthority("create_room", { name: entryName })
+      void requestAuthority("create_room", {
+        name: entryName,
+        youtubeChannelUrl,
+      })
         .then((reply) => finishEntry(reply, entryName))
         .catch(() => {
           setBusy(false);
@@ -610,8 +620,10 @@ export function GameClient() {
     }
     const socket = socketRef.current;
     if (!socket) return;
-    socket.emit("create_room", { name: entryName }, (reply: ServerReply) =>
-      finishEntry(reply, entryName),
+    socket.emit(
+      "create_room",
+      { name: entryName, youtubeChannelUrl },
+      (reply: ServerReply) => finishEntry(reply, entryName),
     );
   }
 
@@ -688,6 +700,45 @@ export function GameClient() {
     );
   }
 
+  async function rerouteTransmission(failure: {
+    transmissionId: string;
+    videoId: string;
+    errorCode: number;
+  }): Promise<{ ok: boolean; error?: string }> {
+    if (!session) return { ok: false, error: "No table signal is active." };
+    const payload = {
+      code: session.code,
+      token: session.token,
+      ...failure,
+    };
+    if (HTTP_AUTHORITY) {
+      try {
+        const reply = await requestAuthority("reject_transmission", payload);
+        if (reply.state) setRoom(reply.state);
+        return { ok: reply.ok, error: reply.error };
+      } catch {
+        return {
+          ok: false,
+          error: "The room authority could not route another upload.",
+        };
+      }
+    }
+    const socket = socketRef.current;
+    if (!socket) {
+      return { ok: false, error: "The room authority is offline." };
+    }
+    return new Promise((resolve) => {
+      socket.emit(
+        "reject_transmission",
+        payload,
+        (reply: ServerReply) => {
+          if (reply.state) setRoom(reply.state);
+          resolve({ ok: reply.ok, error: reply.error });
+        },
+      );
+    });
+  }
+
   function leaveTable() {
     setRoom(null);
     setSession(null);
@@ -710,8 +761,10 @@ export function GameClient() {
         error={error}
         name={name}
         roomCode={roomCode}
+        youtubeChannelUrl={youtubeChannelUrl}
         onName={setName}
         onRoomCode={setRoomCode}
+        onYoutubeChannelUrl={setYoutubeChannelUrl}
         onCreate={createRoom}
         onJoin={joinRoom}
       />
@@ -729,7 +782,9 @@ export function GameClient() {
   );
 
   return (
-    <main className={`game-shell${signalDanger ? " signal-danger" : ""}`}>
+    <main
+      className={`game-shell entity-v5 mode--${room.youtubeChannel?.brand || "obscur"}${signalDanger ? " signal-danger" : ""}`}
+    >
       <header className="game-header">
         <div className="game-brand">
           <div className="mini-emblem">6</div>
@@ -740,7 +795,7 @@ export function GameClient() {
         </div>
 
         <div className="room-identity">
-          <span>Room signal</span>
+          <span>{room.youtubeChannel?.title || "Room signal"}</span>
           <button onClick={copyCode} type="button" title="Copy room code">
             {room.code}
             <small>copy</small>
@@ -797,6 +852,7 @@ export function GameClient() {
           onChoice={(choiceId) => emitAction("answer_choice", { choiceId })}
           onCouncilVote={(choiceId) => emitAction("vote_council", { choiceId })}
           onGift={(targetSeat) => emitAction("gift_echo", { targetSeat })}
+          onTransmissionFailure={rerouteTransmission}
           onStart={() => emitAction("start_game")}
           onTune={(amount) => emitAction("tune_roll", { amount })}
           onUseRelic={(relicId) => emitAction("use_relic", { relicId })}
@@ -829,12 +885,6 @@ export function GameClient() {
       )}
 
       {helpOpen && <RulesModal room={room} onClose={() => setHelpOpen(false)} />}
-      {transmissionOpen && room.lastEvent.videoUrl && (
-        <TransmissionModal
-          event={room.lastEvent}
-          onClose={() => setTransmissionOpen(false)}
-        />
-      )}
     </main>
   );
 }

@@ -61,11 +61,20 @@ host.
 - Vow progress rewards a particular style of play rather than only raw luck.
 - A traveler wins by carrying an Alabaster Key, reaching thirteen Echoes, and
   completing a full circuit.
-- Every landing draws a random Foxy Alchemy Studio transmission from the
-  server-owned channel deck. The landing player receives a prominent video
-  gate and the table sees the same assignment in the event rail.
-- YouTube playback is always an explicit player action, never autoplays, and
-  never affects movement, rewards, or victory.
+- A room is created with a YouTube channel URL. The authority resolves and
+  caches its public upload catalog once, then draws a random upload on every
+  landing without spending API quota per roll.
+- If YouTube rejects an RSS-discovered embed, the receiver reports only that
+  assigned ID and the authority advances to a distinct candidate. The private
+  catalog, movement, rewards, and landing outcome do not change.
+- Every player and spectator receives the same authority-issued transmission.
+  It enters as a full-table broadcast, then docks beside the board while the
+  next turn continues.
+- The player attempts playback immediately after a landing. If a browser blocks
+  autoplay, the receiver presents one adjacent `START SIGNAL` control. Native
+  pause, mute, captions, fullscreen, and YouTube controls remain available.
+- Playback never gates movement and watch duration never changes rewards,
+  progression, or victory.
 - The authority enforces six seats but deliberately does not enforce one seat
   per person, account, or network. One operator may occupy all six through six
   separate sessions.
@@ -97,6 +106,9 @@ public room snapshots.
 - `NEXT_PUBLIC_GAME_SERVER_URL` — browser-facing realtime endpoint
 - `VITE_GAME_SERVER_URL` — authority endpoint embedded in the GitHub Pages
   client
+- `YOUTUBE_API_KEY` — optional server-only YouTube Data API v3 credential. It
+  enables complete handle resolution, larger upload catalogs, and filtering
+  for public embeddable videos. It must never be embedded in GitHub Pages.
 
 Board rules, mask abilities, vows, relics, event decks, and the curated channel
 video IDs live in

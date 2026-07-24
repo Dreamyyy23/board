@@ -1,0 +1,72 @@
+/* Imported after globals.css so channel-room layout rules always win. */
+
+.entry-screen {
+  min-height: 100svh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.entry-card {
+  width: min(100%, 540px);
+  max-height: calc(100svh - 10.5rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.entity-v5 .command-rail {
+  z-index: auto;
+}
+
+/*
+ * Short desktop viewports should scroll as one composed invitation rather than
+ * trapping the create action inside a second scrollbar. The mask codex becomes
+ * the next natural section instead of sitting over the room form.
+ */
+@media (min-width: 1121px) and (max-height: 800px) {
+  .entry-screen {
+    align-content: start;
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+  }
+
+  .entry-intro,
+  .entry-card {
+    align-self: start;
+  }
+
+  .entry-card {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .entry-mask-strip {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    grid-column: 1 / -1;
+    margin-top: 2.25rem;
+  }
+}
+
+@media (max-width: 1120px) {
+  .entry-screen {
+    align-content: start;
+    padding-top: 3.2rem;
+    padding-bottom: 9rem;
+  }
+
+  .entry-card {
+    max-height: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .entry-screen {
+    justify-content: flex-start;
+  }
+
+  .entry-card {
+    max-height: none;
+  }
+}

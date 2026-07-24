@@ -10,6 +10,7 @@ import {
   claimSeat,
   createRoom,
   publicRoom,
+  retryTransmission,
   rollTurn,
   seatPlayer,
   tuneRoll,
@@ -268,4 +269,138 @@ test("every landing receives a random Foxy Alchemy transmission", () => {
   assert.equal(council.council, true);
   assert.equal(council.event.videoId, FOXY_ALCHEMY_VIDEOS[0]);
   assert.equal(council.event.landingSeat, player.seat);
+});
+
+test("a room draws only from its bound channel and uniquely identifies repeat broadcasts", () => {
+  const room = createRoom("BOUND", 100, {
+    id: "UCabcdefghijklmnopqrstuv",
+    title: "Single Signal Studio",
+    handle: "@SingleSignal",
+    url: "https://www.youtube.com/@SingleSignal",
+    brand: "fateweaver",
+    source: "test-catalog",
+    fetchedAt: 100,
+    videos: [{ id: "AAAABBBB001", title: "The Only Transmission" }],
+  });
+  const player = seatPlayer(room, { name: "Receiver" });
+  beginGame(room, player.token, 1_000);
+
+  const first = rollTurn(room, player.token, {
+    now: 2_000,
+    rng: () => 0,
+  });
+  const second = rollTurn(room, player.token, {
+    now: 3_000,
+    rng: () => 0,
+  });
+
+  assert.equal(first.event.videoId, "AAAABBBB001");
+  assert.equal(second.event.videoId, "AAAABBBB001");
+  assert.equal(first.event.videoTitle, "The Only Transmission");
+  assert.equal(first.event.videoSource, "Single Signal Studio");
+  assert.equal(first.event.channelBrand, "fateweaver");
+  assert.notEqual(first.event.transmissionId, second.event.transmissionId);
+  assert.equal(first.event.transmissionStartedAt, 2_000);
+  assert.equal(second.event.transmissionStartedAt, 3_000);
+  assert.equal(
+    room.activeTransmission.transmissionId,
+    second.event.transmissionId,
+  );
+  assert.equal(room.activeTransmission.landingSpace, player.position);
+
+  const state = publicRoom(room, 3_000);
+  assert.deepEqual(state.youtubeChannel, {
+    id: "UCabcdefghijklmnopqrstuv",
+    title: "Single Signal Studio",
+    handle: "@SingleSignal",
+    url: "https://www.youtube.com/@SingleSignal",
+    brand: "fateweaver",
+    videoCount: 1,
+    source: "test-catalog",
+  });
+  assert.equal("videos" in state.youtubeChannel, false);
+  assert.equal(
+    state.activeTransmission.transmissionId,
+    second.event.transmissionId,
+  );
+});
+
+test("a rejected embed advances through distinct private candidates without replaying the landing", () => {
+  const room = createRoom("ROUTE", 100, {
+    id: "UCabcdefghijklmnopqrstuv",
+    title: "Fail-forward Studio",
+    url: "https://www.youtube.com/@FailForward",
+    brand: "inkblot",
+    source: "youtube-rss",
+    videos: [
+      { id: "AAAABBBB001", title: "First" },
+      { id: "AAAABBBB002", title: "Second" },
+      { id: "AAAABBBB003", title: "Third" },
+    ],
+  });
+  const player = seatPlayer(room, { name: "Receiver" });
+  beginGame(room, player.token, 1_000);
+  const landing = rollTurn(room, player.token, {
+    now: 2_000,
+    rng: () => 0,
+  });
+  const firstTransmissionId = landing.event.transmissionId;
+  const firstVideoId = landing.event.videoId;
+  const gameOutcome = {
+    position: player.position,
+    echoes: player.echoes,
+    keys: player.keys,
+    signal: room.signal,
+    turnNumber: room.turnNumber,
+    lastRoll: room.lastRoll,
+  };
+
+  const second = retryTransmission(
+    room,
+    firstTransmissionId,
+    "AAAABBBB001",
+    { now: 3_000, rng: () => 0 },
+  );
+  assert.equal(second.videoId, "AAAABBBB002");
+  assert.notEqual(second.transmissionId, firstTransmissionId);
+  assert.deepEqual(
+    {
+      position: player.position,
+      echoes: player.echoes,
+      keys: player.keys,
+      signal: room.signal,
+      turnNumber: room.turnNumber,
+      lastRoll: room.lastRoll,
+    },
+    gameOutcome,
+  );
+
+  const third = retryTransmission(
+    room,
+    second.transmissionId,
+    second.videoId,
+    { now: 4_000, rng: () => 0 },
+  );
+  assert.equal(third.videoId, "AAAABBBB003");
+  assert.throws(
+    () =>
+      retryTransmission(room, third.transmissionId, third.videoId, {
+        now: 5_000,
+      }),
+    /Every available channel transmission was rejected/,
+  );
+  assert.throws(
+    () =>
+      retryTransmission(
+        room,
+        firstTransmissionId,
+        firstVideoId,
+      ),
+    /already moved/,
+  );
+
+  const publicState = publicRoom(room, 4_000);
+  assert.equal(publicState.activeTransmission.videoId, "AAAABBBB003");
+  assert.equal("videos" in publicState.youtubeChannel, false);
+  assert.equal("transmissionRecovery" in publicState, false);
 });

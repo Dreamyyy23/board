@@ -1,4 +1,4 @@
-# Sixfold Road protocol v2
+# Sixfold Road protocol v3
 
 Socket.IO acknowledgement callbacks are used for commands. `room_state` is the
 canonical public snapshot broadcast after every accepted mutation. Clients do
@@ -8,9 +8,13 @@ not optimistically change positions, scores, inventory, votes, or timers.
 
 ### `create_room`
 
-Input: `{ name }`
+Input: `{ name, youtubeChannelUrl }`
 
 Reply: `{ ok, code, token, playerId, state }`
+
+The authority resolves the channel before allocating the room, rejects empty
+or unreadable channels, and stores the resulting public-upload catalog
+privately. An optional API key adds server-side embeddability filtering.
 
 ### `join_room`
 
@@ -74,6 +78,16 @@ Input: `{ code, token }`
 Contains no die value. The server verifies the active traveler, rolls, applies
 Focus tuning and mask passives, moves the token, and resolves the landed space.
 
+### `reject_transmission`
+
+Input: `{ code, transmissionId, videoId, errorCode? }`
+
+Reports that YouTube rejected the currently assigned embed. The authority
+validates both public IDs, privately excludes every candidate already attempted
+for that landing, and stages a distinct upload. This command never reruns the
+space, movement, rewards, hazards, or victory checks. The room catalog remains
+absent from public snapshots.
+
 ## Paused-state commands
 
 ### `answer_choice`
@@ -100,16 +114,19 @@ The public snapshot contains:
 - six mask definitions and six token-free public player slots
 - current seat and authoritative deadline
 - latest public die result, movement, event, and chronicle
-- the landing's server-selected `videoId`, canonical YouTube `videoUrl`,
-  channel source, and voluntary playback label
+- public channel metadata (`id`, title, URL, visual brand, and video count)
+- the landing's server-selected `transmissionId`, start time, `videoId`, title,
+  canonical YouTube `videoUrl`, and channel source
 - pending Oracle choice or pending Council with visible submitted votes
 - per-player Echoes, Key state, Focus, Resolve, Vow progress, relics, ward,
   tuning, connection state, and public statistics
 - global Static signal, current hazard, and winner
 
 Private reconnect tokens never appear in room snapshots or broadcasts.
-Video assignments are informational event data only. The authority never waits
-for playback and never grants progression for opening or watching a link.
+Every accepted landing creates a new unique transmission even when a
+single-video channel repeats. Clients stage that assignment for every player
+and spectator. The authority never waits for playback and never grants
+progression for opening, pausing, or watching a video.
 
 ## Timer and disconnect behavior
 

@@ -88,6 +88,26 @@ test(
     const afterRoll = await movedState;
     assert.equal(afterRoll.currentSeat, 1);
 
+    const reroutedState = waitForState(
+      second,
+      (state) =>
+        state.activeTransmission?.videoId !==
+        afterRoll.activeTransmission.videoId,
+    );
+    const rerouted = await emit(second, "reject_transmission", {
+      code: created.code,
+      transmissionId: afterRoll.activeTransmission.transmissionId,
+      videoId: afterRoll.activeTransmission.videoId,
+    });
+    assert.equal(rerouted.ok, true);
+    const afterReroute = await reroutedState;
+    assert.notEqual(
+      afterReroute.activeTransmission.videoId,
+      afterRoll.activeTransmission.videoId,
+    );
+    assert.deepEqual(afterReroute.lastRoll, afterRoll.lastRoll);
+    assert.equal(afterReroute.turnNumber, afterRoll.turnNumber);
+
     second.disconnect();
     const returning = io(url, { transports: ["websocket"] });
     context.after(() => returning.disconnect());
