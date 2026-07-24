@@ -161,13 +161,13 @@ export function CommandRail({
   const council = room.pendingCouncil;
   const event = council?.event || room.pendingChoice?.event || room.lastEvent;
   const transmission = room.activeTransmission;
-  const seconds = room.secondsLeft ?? 20;
+  const seconds = room.secondsLeft ?? 61;
   const phaseBudget =
     phase === "bend" || phase === "reaction"
       ? 5
       : phase === "council-reveal"
         ? 1
-        : 20;
+        : 61;
   const progress = Math.max(0, Math.min(100, (seconds / phaseBudget) * 100));
   const currentPlayer =
     room.currentSeat === null ? null : room.players[room.currentSeat];

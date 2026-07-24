@@ -17,6 +17,10 @@ import {
   useRelic,
 } from "../server/game-core.mjs";
 
+test("the authoritative turn window is sixty-one seconds", () => {
+  assert.equal(TURN_MS, 61_000);
+});
+
 test("a room exposes six seats without leaking reconnect tokens", () => {
   const room = createRoom("NORTH", 100);
   const player = seatPlayer(room, { name: "<Fox> Dreamer" });

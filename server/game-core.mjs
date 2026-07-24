@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 
 export const MAX_PLAYERS = 6;
 export const BOARD_SIZE = 36;
-export const TURN_MS = 20_000;
+export const TURN_MS = 61_000;
 export const BEND_MS = 5_000;
 export const REACTION_MS = 5_000;
 export const COUNCIL_REVEAL_MS = 650;
@@ -799,7 +799,7 @@ export function beginGame(room, actorToken, now = Date.now()) {
   room.lastEvent = {
     id: "first-turn",
     title: "The Road Opens",
-    body: `${room.players[firstSeat].name} has twenty seconds to choose a tactic and cast the bone.`,
+    body: `${room.players[firstSeat].name} has sixty-one seconds to choose a tactic and cast the bone.`,
     tone: "warm",
   };
   appendLog(room, "The Sixfold Road began to move.", now);

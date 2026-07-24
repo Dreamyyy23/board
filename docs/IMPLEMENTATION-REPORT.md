@@ -105,7 +105,7 @@ Rules-v4 conditional win share remained within 13–20% for every mask: Ember
   `https://obscur-sixfold-road-v4.h-ar-d5-33-5-3.chatgpt.site`. Its
   `/api/authority` endpoint reports `sixfold-road-http-v4` and `rulesVersion:
   4`; a production smoke test created a room, filled all six seats with one
-  human plus five bots, and started in the 20-second `intent` phase. Recent
+  human plus five bots, and started in the 61-second `intent` phase. Recent
   production Worker logs contained no errors.
 - **Source identity:** the original attachment export has no `.git` directory,
   branch, or commit SHA. Publication was therefore performed from a clean clone

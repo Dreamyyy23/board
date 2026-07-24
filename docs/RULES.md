@@ -69,7 +69,7 @@ authority still owns the event and final result.
 
 ## A normal turn
 
-The recognizable authority clock remains 20 seconds. Short decision and
+The recognizable authority clock is 61 seconds. Short decision and
 reaction windows are server-owned parts of the turn; the interface always shows
 which decision is open and its authoritative deadline.
 

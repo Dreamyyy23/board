@@ -243,7 +243,7 @@ function EntryScreen({
 
       <section
         className="entry-ritual-preview"
-        aria-label="Six masks surrounding the twenty-second authority clock"
+        aria-label="Six masks surrounding the sixty-one-second authority clock"
       >
         <div className="entry-orbit">
           <div className="entry-orbit-runes" aria-hidden="true">
@@ -257,7 +257,7 @@ function EntryScreen({
           ))}
           <div className="entry-orbit-heart">
             <small>AUTHORITY</small>
-            <b>20</b>
+            <b>61</b>
             <span>SECONDS</span>
           </div>
         </div>
@@ -360,7 +360,7 @@ function EntryScreen({
               <small>
                 {legacyCompatibility
                   ? "Every landing stages one authority-selected Foxy transmission"
-                  : "Six seats · 20-second authority · Witness · Oxygen · Fractures · Final Orbit"}
+                  : "Six seats · 61-second authority · Witness · Oxygen · Fractures · Final Orbit"}
               </small>
             </span>
             <i aria-hidden="true">→</i>

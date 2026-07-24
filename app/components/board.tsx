@@ -221,8 +221,8 @@ export function Board({
           <strong>{activePlayer?.name || "The House"}</strong>
           <span>{PHASE_LABELS[phase] || phase}</span>
         </div>
-        <b aria-label={`${room.secondsLeft ?? 20} seconds remaining`}>
-          {room.status === "playing" ? room.secondsLeft ?? 20 : "—"}
+        <b aria-label={`${room.secondsLeft ?? 61} seconds remaining`}>
+          {room.status === "playing" ? room.secondsLeft ?? 61 : "—"}
           <small>SEC</small>
         </b>
       </div>
@@ -424,7 +424,7 @@ export function Board({
               ? `NATURAL ${natural} · BEND WINDOW`
               : canRoll
                 ? `INTENT ${room.turn?.intent?.toUpperCase()} · ${
-                    room.secondsLeft ?? 20
+                    room.secondsLeft ?? 61
                   } SECONDS`
                 : phase === "intent" && activePlayer
                   ? intentLocked
