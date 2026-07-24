@@ -1,7 +1,18 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { io, Socket } from "socket.io-client";
+import {
+  authorityModeFromProtocol,
+  createAuthorityCompatibility,
+} from "./authority-compat.mjs";
 import { Board } from "./components/board";
 import { CommandRail } from "./components/command-rail";
 import { MaskPortrait } from "./components/mask-portrait";
@@ -13,6 +24,7 @@ const SERVER_URL =
 const HTTP_AUTHORITY = SERVER_URL.endsWith("/api/authority");
 const SESSION_KEY = "obscur-sixfold-session";
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/@FoxyAlchemyStudio";
+type AuthorityMode = "unknown" | "v1" | "v2";
 
 const CREATOR_CHANNELS = [
   {
@@ -127,6 +139,7 @@ function EntryScreen({
   name,
   roomCode,
   youtubeChannelUrl,
+  authorityMode,
   onName,
   onRoomCode,
   onYoutubeChannelUrl,
@@ -139,12 +152,14 @@ function EntryScreen({
   name: string;
   roomCode: string;
   youtubeChannelUrl: string;
+  authorityMode: AuthorityMode;
   onName: (value: string) => void;
   onRoomCode: (value: string) => void;
   onYoutubeChannelUrl: (value: string) => void;
   onCreate: (event: FormEvent) => void;
   onJoin: (event: FormEvent) => void;
 }) {
+  const legacyCompatibility = authorityMode === "v1";
   return (
     <main className="entry-screen">
       <div className="entry-table-image" />
@@ -189,10 +204,19 @@ function EntryScreen({
           </span>
         </div>
         <p className="entry-card-copy">
-          Bind one YouTube channel to the road. Every landing makes the
-          authority choose and stage a random public upload for the whole
-          table.
+          {legacyCompatibility
+            ? "The live checkpoint currently stages a Foxy Alchemy Studio transmission on every landing."
+            : "Bind one YouTube channel to the road. Every landing makes the authority choose and stage a random public upload for the whole table."}
         </p>
+        {legacyCompatibility ? (
+          <div className="entry-compat-notice" role="status">
+            <b>FOXY-ONLY COMPATIBILITY MODE</b>
+            <span>
+              Custom creator channels require the next authority release.
+              Tables created here use the current Foxy Alchemy catalog.
+            </span>
+          </div>
+        ) : null}
 
         <form onSubmit={onCreate}>
           <label>
@@ -204,7 +228,10 @@ function EntryScreen({
               autoComplete="nickname"
             />
           </label>
-          <fieldset className="channel-terminal">
+          <fieldset
+            className={`channel-terminal${legacyCompatibility ? " is-compat-locked" : ""}`}
+            disabled={legacyCompatibility}
+          >
             <legend>
               <span>Channel bound to this room</span>
               <small>Resolved once, drawn by the authority on every landing</small>
@@ -245,10 +272,13 @@ function EntryScreen({
           <button className="entry-primary" disabled={!connected || busy} type="submit">
             <b aria-hidden="true">◆</b>
             <span>
-              Bind channel &amp; create table
+              {legacyCompatibility
+                ? "Create Foxy compatibility table"
+                : "Bind channel & create table"}
               <small>
-                Public uploads form a private room catalog; refused embeds
-                automatically route to a different upload
+                {legacyCompatibility
+                  ? "Every landing stages one authority-selected Foxy transmission"
+                  : "Public uploads form a private room catalog; refused embeds automatically route to a different upload"}
               </small>
             </span>
             <i aria-hidden="true">→</i>
@@ -405,7 +435,14 @@ function RulesModal({
 
 export function GameClient() {
   const socketRef = useRef<Socket | null>(null);
+  const compatibilityRef = useRef(createAuthorityCompatibility());
+  const authorityModeRef = useRef<AuthorityMode>(
+    HTTP_AUTHORITY ? "unknown" : "v2",
+  );
   const [connected, setConnected] = useState(false);
+  const [authorityMode, setAuthorityMode] = useState<AuthorityMode>(
+    HTTP_AUTHORITY ? "unknown" : "v2",
+  );
   const [room, setRoom] = useState<RoomState | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [name, setName] = useState("Wanderer");
@@ -420,6 +457,23 @@ export function GameClient() {
   const lastRollRef = useRef<string>("");
   const lastTurnRef = useRef<number | null>(null);
   const collapseRef = useRef(0);
+
+  const rememberAuthorityMode = useCallback((mode: AuthorityMode) => {
+    authorityModeRef.current = mode;
+    setAuthorityMode(mode);
+  }, []);
+
+  const receiveRoomState = useCallback(
+    (state: RoomState, protocol?: string) => {
+      const normalized = compatibilityRef.current.normalize(
+        state,
+        protocol || authorityModeRef.current,
+      );
+      rememberAuthorityMode(normalized.mode as AuthorityMode);
+      setRoom(normalized.room as RoomState);
+    },
+    [rememberAuthorityMode],
+  );
 
   useEffect(() => {
     if (HTTP_AUTHORITY) {
@@ -458,10 +512,12 @@ export function GameClient() {
             return;
           }
 
+          const replyMode = authorityModeFromProtocol(reply.protocol);
+          if (replyMode) rememberAuthorityMode(replyMode as AuthorityMode);
           setConnected(true);
           setError("");
           if (reply.state) {
-            setRoom(reply.state);
+            receiveRoomState(reply.state, reply.protocol);
             if (action === "join_room" && saved) {
               const restored = {
                 ...saved,
@@ -502,6 +558,7 @@ export function GameClient() {
     });
     socketRef.current = nextSocket;
     nextSocket.on("connect", () => {
+      rememberAuthorityMode("v2");
       setConnected(true);
       setError("");
       const saved = readSession();
@@ -519,7 +576,7 @@ export function GameClient() {
               };
               setSession(restored);
               saveSession(restored);
-              setRoom(reply.state);
+              receiveRoomState(reply.state, reply.protocol);
             } else {
               saveSession(null);
             }
@@ -532,12 +589,14 @@ export function GameClient() {
       setConnected(false);
       setError("The room authority is offline. Reconnection will continue automatically.");
     });
-    nextSocket.on("room_state", (state: RoomState) => setRoom(state));
+    nextSocket.on("room_state", (state: RoomState) =>
+      receiveRoomState(state, "sixfold-road-v3"),
+    );
     return () => {
       socketRef.current = null;
       nextSocket.disconnect();
     };
-  }, []);
+  }, [receiveRoomState, rememberAuthorityMode]);
 
   const self = useMemo(
     () =>
@@ -593,7 +652,7 @@ export function GameClient() {
     };
     setSession(nextSession);
     saveSession(nextSession);
-    setRoom(reply.state);
+    receiveRoomState(reply.state, reply.protocol);
     setError("");
   }
 
@@ -672,7 +731,7 @@ export function GameClient() {
             setError(reply.error || "The table refused the move.");
             if (sound) playTone("error");
           } else {
-            if (reply.state) setRoom(reply.state);
+            if (reply.state) receiveRoomState(reply.state, reply.protocol);
             setError("");
           }
         })
@@ -706,6 +765,13 @@ export function GameClient() {
     errorCode: number;
   }): Promise<{ ok: boolean; error?: string }> {
     if (!session) return { ok: false, error: "No table signal is active." };
+    if (authorityModeRef.current === "v1") {
+      return {
+        ok: false,
+        error:
+          "This compatibility table cannot reroute a refused Foxy transmission.",
+      };
+    }
     const payload = {
       code: session.code,
       token: session.token,
@@ -714,7 +780,7 @@ export function GameClient() {
     if (HTTP_AUTHORITY) {
       try {
         const reply = await requestAuthority("reject_transmission", payload);
-        if (reply.state) setRoom(reply.state);
+        if (reply.state) receiveRoomState(reply.state, reply.protocol);
         return { ok: reply.ok, error: reply.error };
       } catch {
         return {
@@ -732,7 +798,7 @@ export function GameClient() {
         "reject_transmission",
         payload,
         (reply: ServerReply) => {
-          if (reply.state) setRoom(reply.state);
+          if (reply.state) receiveRoomState(reply.state, reply.protocol);
           resolve({ ok: reply.ok, error: reply.error });
         },
       );
@@ -762,6 +828,7 @@ export function GameClient() {
         name={name}
         roomCode={roomCode}
         youtubeChannelUrl={youtubeChannelUrl}
+        authorityMode={authorityMode}
         onName={setName}
         onRoomCode={setRoomCode}
         onYoutubeChannelUrl={setYoutubeChannelUrl}
@@ -783,7 +850,7 @@ export function GameClient() {
 
   return (
     <main
-      className={`game-shell entity-v5 mode--${room.youtubeChannel?.brand || "obscur"}${signalDanger ? " signal-danger" : ""}`}
+      className={`game-shell entity-v5 mode--${room.youtubeChannel?.brand || "obscur"}${authorityMode === "v1" ? " is-legacy-authority" : ""}${signalDanger ? " signal-danger" : ""}`}
     >
       <header className="game-header">
         <div className="game-brand">
@@ -795,7 +862,11 @@ export function GameClient() {
         </div>
 
         <div className="room-identity">
-          <span>{room.youtubeChannel?.title || "Room signal"}</span>
+          <span>
+            {authorityMode === "v1"
+              ? "Foxy-only compatibility"
+              : room.youtubeChannel?.title || "Room signal"}
+          </span>
           <button onClick={copyCode} type="button" title="Copy room code">
             {room.code}
             <small>copy</small>
@@ -852,7 +923,9 @@ export function GameClient() {
           onChoice={(choiceId) => emitAction("answer_choice", { choiceId })}
           onCouncilVote={(choiceId) => emitAction("vote_council", { choiceId })}
           onGift={(targetSeat) => emitAction("gift_echo", { targetSeat })}
-          onTransmissionFailure={rerouteTransmission}
+          onTransmissionFailure={
+            authorityMode === "v1" ? undefined : rerouteTransmission
+          }
           onStart={() => emitAction("start_game")}
           onTune={(amount) => emitAction("tune_roll", { amount })}
           onUseRelic={(relicId) => emitAction("use_relic", { relicId })}
@@ -868,7 +941,9 @@ export function GameClient() {
               : "Watching the road"}
         </span>
         <span>
-          Authority protocol v2 · reconnectable seats · private tokens · server-owned outcomes
+          {authorityMode === "v1"
+            ? "Authority protocol v1 · Foxy-only compatibility · server-owned outcomes"
+            : "Authority protocol v2 · reconnectable seats · private tokens · server-owned outcomes"}
         </span>
         <span>
           {room.status === "playing"

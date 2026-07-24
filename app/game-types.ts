@@ -144,6 +144,7 @@ export type Session = {
 
 export type ServerReply = {
   ok: boolean;
+  protocol?: string;
   error?: string;
   code?: string;
   token?: string | null;

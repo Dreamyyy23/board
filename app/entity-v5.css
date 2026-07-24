@@ -17,6 +17,51 @@
   z-index: auto;
 }
 
+.entry-compat-notice {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.85rem 0 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--gold) 48%, transparent);
+  background:
+    linear-gradient(90deg, rgba(212, 169, 74, 0.12), transparent 75%),
+    rgba(7, 9, 8, 0.76);
+  box-shadow: inset 3px 0 0 rgba(212, 169, 74, 0.72);
+}
+
+.entry-compat-notice b {
+  color: var(--gold-bright);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+}
+
+.entry-compat-notice span {
+  color: rgba(234, 226, 205, 0.7);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.channel-terminal.is-compat-locked {
+  opacity: 0.45;
+  filter: saturate(0.45);
+}
+
+.channel-terminal.is-compat-locked::after {
+  content: "V2 CHANNEL DIRECTORY AWAITING AUTHORITY";
+  display: block;
+  margin-top: 0.7rem;
+  color: rgba(234, 226, 205, 0.66);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+.entity-v5.is-legacy-authority .room-identity > span {
+  color: var(--gold-bright);
+}
+
 /*
  * Short desktop viewports should scroll as one composed invitation rather than
  * trapping the create action inside a second scrollbar. The mask codex becomes

@@ -498,13 +498,17 @@ export function TransmissionStage({
               <button
                 className="transmission-stage__start"
                 onClick={
-                  playerError
+                  playerError && onPlaybackFailure
                     ? () => void requestAlternative(true)
                     : loadCurrentTransmission
                 }
                 type="button"
               >
-                {playerError ? "TRY NEXT UPLOAD" : "START SIGNAL"}
+                {playerError
+                  ? onPlaybackFailure
+                    ? "TRY NEXT UPLOAD"
+                    : "RETRY SIGNAL"
+                  : "START SIGNAL"}
               </button>
             ) : null}
             {playerError && event?.channelUrl ? (

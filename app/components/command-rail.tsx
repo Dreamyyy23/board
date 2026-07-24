@@ -52,7 +52,7 @@ export function CommandRail({
   onTune: (amount: number) => void;
   onUseRelic: (id: string) => void;
   onGift: (seat: number) => void;
-  onTransmissionFailure: (failure: {
+  onTransmissionFailure?: (failure: {
     transmissionId: string;
     videoId: string;
     errorCode: number;
