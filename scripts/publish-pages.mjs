@@ -8,10 +8,10 @@ const publishedAssets = resolve(root, "pages-assets");
 const publicSource = resolve(root, "public");
 const previewPublic = resolve(output, "public");
 const publicAssetNames = [
-  "mask-sheet.png",
+  "mask-sheet.webp",
   "og.png",
-  "omen-sheet-v2.png",
-  "table-bg.png",
+  "omen-sheet-v2.webp",
+  "table-bg.webp",
 ];
 
 await rm(publishedAssets, { recursive: true, force: true });
