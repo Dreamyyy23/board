@@ -1,8 +1,8 @@
 # Obscur rules v4 implementation report
 
 Date: 2026-07-25
-Status: local implementation and acceptance complete; production deployment
-blocked by external project/source state.
+Status: implementation and acceptance complete; GitHub Pages client published;
+rules-v4 authority deployment remains blocked by external project state.
 
 ## Core design changes
 
@@ -92,7 +92,14 @@ Both runs used 10,000 six-seat matches and seed `20260725`.
 Rules-v4 conditional win share remained within 13–20% for every mask: Ember
 19.3%, Moss 18.2%, Ash 17.4%, Moon 15.8%, Veil 14.9%, and Thorn 14.5%.
 
-## Deployment steps not performed
+## Deployment status
+
+- **GitHub Pages:** implementation commit
+  `6753e74e1ec81816b60d08f012ec33c314d0f091` is published at
+  `https://dreamyyy23.github.io/board/`. The public HTML, v4 JavaScript bundle,
+  stylesheet, and required artwork all return HTTP 200. The configured
+  authority still reports `sixfold-road-http-v1`, so the public client uses its
+  explicit Foxy-only compatibility mode rather than claiming v4 authority.
 
 - **OpenAI Sites:** `.openai/hosting.json` names project
   `appgprj_6a6335b811948191b68de9108c3f11ee`, but the Sites connector returns
@@ -129,9 +136,9 @@ release check. Synthesized audio also remains subject to browser gesture rules.
 
 ### Production deployment
 
-Rules v4 is not publicly live. The recorded Sites project is missing, the
-local source has no commit identity, and the known public authority remains a
-rules-v1 compatibility endpoint.
+The rules-v4 client is publicly live, but authoritative rules-v4 gameplay is
+not. The recorded Sites project is missing and the configured public authority
+remains a rules-v1 compatibility endpoint.
 
 ## Exact commands
 
