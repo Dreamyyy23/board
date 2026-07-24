@@ -48,9 +48,9 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [
         {
           url: `${origin}/og.png`,
-          width: 1730,
-          height: 909,
-          alt: "Obscur: The Sixfold Road board and six masks",
+          width: 1672,
+          height: 941,
+          alt: "Obscur: The Sixfold Road ritual board and six masks",
         },
       ],
     },

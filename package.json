@@ -11,8 +11,10 @@
     "dev:server": "node --watch server/server.mjs",
     "build": "vinext build && node scripts/prune-sites-build.mjs",
     "build:pages": "vite build --config vite.pages.config.ts && node scripts/publish-pages.mjs",
+    "simulate": "node scripts/simulate.mjs",
     "start": "vinext start",
     "start:server": "node server/server.mjs",
+    "simulate:baseline": "node scripts/simulate-baseline.mjs",
     "test": "node --test tests/*.test.mjs && npm run build",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },

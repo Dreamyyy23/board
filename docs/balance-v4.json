@@ -1,0 +1,1087 @@
+{
+  "schemaVersion": 1,
+  "rulesVersion": 4,
+  "generatedAt": "2026-07-24T19:52:20.289Z",
+  "durationMs": 143049,
+  "configuration": {
+    "matches": 10000,
+    "players": 6,
+    "seed": 20260725,
+    "profiles": [
+      "six-basic",
+      "six-heuristic",
+      "mixed",
+      "solo-plus-bots",
+      "independent-six",
+      "timeout-defaults"
+    ],
+    "policyAssignment": "Matches are distributed round-robin across the selected policy profiles."
+  },
+  "metricDefinitions": {
+    "intentSuccess": "A resolved ordinary, Oracle, or Council outcome whose visible weighted resource value minus Static gain is positive.",
+    "omenValue": "Mean visible weighted resource value minus Static gain for ordinary resolutions carrying that Omen.",
+    "successfulNonActiveParticipation": "A round with a correct Witness reward, successful Oxygen action, or resolved Council.",
+    "turnCount": "Number of authoritative cast events.",
+    "softLockOrInvalidState": "A thrown authority transition, unknown phase, non-terminal action cap, or missing active seat."
+  },
+  "acceptanceTargets": {
+    "completionRate": 1,
+    "turns45To84Rate": 0.95,
+    "turnMedianRange": [
+      60,
+      78
+    ],
+    "fractureMedian": 1,
+    "fractureP90Maximum": 2,
+    "conditionalMaskWinShareRange": [
+      0.13,
+      0.2
+    ],
+    "maximumIntentUsage": 0.6,
+    "successfulNonActiveParticipationRoundRate": 0.7,
+    "matchesWithTwoThreadLinksRate": 0.6,
+    "maximumUnexplainedOracleOrCouncilChoiceShare": 0.7
+  },
+  "overall": {
+    "matches": 10000,
+    "completionRate": 1,
+    "turnCount": {
+      "mean": 59.87,
+      "median": 60,
+      "p10": 51,
+      "p90": 72,
+      "p95": 78
+    },
+    "turns45To84Rate": 0.9858,
+    "victories": {
+      "playerRate": 0.9057,
+      "houseRate": 0.0943
+    },
+    "playerWinShareByMask": {
+      "ash": 0.1738,
+      "ember": 0.1926,
+      "moon": 0.1576,
+      "moss": 0.1821,
+      "thorn": 0.1452,
+      "veil": 0.1488
+    },
+    "intents": {
+      "usage": {
+        "bind": 0.2206,
+        "claim": 0.2292,
+        "shelter": 0.5502
+      },
+      "successRate": {
+        "bind": 0.8179,
+        "claim": 0.8913,
+        "shelter": 0.6946
+      },
+      "usageByMask": {
+        "ash": {
+          "bind": 0.4941,
+          "claim": 0.0804,
+          "shelter": 0.4256
+        },
+        "ember": {
+          "bind": 0.141,
+          "claim": 0.2633,
+          "shelter": 0.5957
+        },
+        "moon": {
+          "bind": 0.1245,
+          "claim": 0.1098,
+          "shelter": 0.7657
+        },
+        "moss": {
+          "bind": 0.1039,
+          "claim": 0.3878,
+          "shelter": 0.5083
+        },
+        "thorn": {
+          "bind": 0.3859,
+          "claim": 0.1332,
+          "shelter": 0.4809
+        },
+        "veil": {
+          "bind": 0.0753,
+          "claim": 0.3998,
+          "shelter": 0.5248
+        }
+      }
+    },
+    "focusPerMatch": {
+      "earned": 26.83,
+      "spent": 16.67
+    },
+    "oxygen": {
+      "attemptsPerMatch": 0.83,
+      "successesPerMatch": 0.59,
+      "successRate": 0.7145
+    },
+    "goldenThreadsPerMatch": 9.89,
+    "matchesWithTwoThreadLinksRate": 0.8334,
+    "successfulNonActiveParticipationRoundRate": 0.8814,
+    "staticByRound": {
+      "1": 4.02,
+      "2": 5.5,
+      "3": 6.71,
+      "4": 6.91,
+      "5": 6.99,
+      "6": 7.08,
+      "7": 6.99,
+      "8": 6.78,
+      "9": 6.51,
+      "10": 6.35,
+      "11": 6.48,
+      "12": 7.01,
+      "13": 7.29
+    },
+    "fracturesPerMatch": {
+      "mean": 1.26,
+      "median": 1,
+      "p10": 0,
+      "p90": 2,
+      "p95": 3
+    },
+    "finalOrbitTriggerRound": {
+      "mean": 8.93,
+      "median": 9,
+      "p10": 8,
+      "p90": 11,
+      "p95": 11
+    },
+    "vowCompletionRateByMask": {
+      "ember": 0.0007,
+      "veil": 0.3117,
+      "thorn": 0.0965,
+      "moon": 0.1943,
+      "moss": 0.0398,
+      "ash": 0.4764
+    },
+    "oracleOptionFrequency": {
+      "CARRY IT OUTWARD": 0.29,
+      "KEEP ITS WEIGHT": 0.1428,
+      "LIVE BENEATH IT": 0.0417,
+      "NAME THE DOOR": 0.1401,
+      "NAME THE TRUTH": 0.1934,
+      "SPEND ITS WEIGHT": 0.1921
+    },
+    "councilResultFrequency": {
+      "knot": 0.0312,
+      "open": 0.2236,
+      "watch": 0.7452
+    },
+    "councilVoteFrequency": {
+      "knot": 0.2158,
+      "open": 0.3422,
+      "watch": 0.4421
+    },
+    "omenFrequency": {
+      "door": 0.067,
+      "flame": 0.2336,
+      "mirror": 0.1004,
+      "moth": 0.266,
+      "static": 0.1339,
+      "thread": 0.1992
+    },
+    "omenMeanResolutionValue": {
+      "door": 1.995,
+      "flame": 2.578,
+      "mirror": 2.006,
+      "moth": 2.032,
+      "static": 1.677,
+      "thread": 1.989
+    },
+    "maskPowerUsesPerMatch": 3.89,
+    "relicUsesPerMatch": 2.18,
+    "softLockOrInvalidStateCount": 0,
+    "invalidStateReasons": {}
+  },
+  "profiles": {
+    "six-basic": {
+      "matches": 1667,
+      "completionRate": 1,
+      "turnCount": {
+        "mean": 61.8,
+        "median": 60,
+        "p10": 48,
+        "p90": 72,
+        "p95": 78
+      },
+      "turns45To84Rate": 0.9682,
+      "victories": {
+        "playerRate": 0.8416,
+        "houseRate": 0.1584
+      },
+      "playerWinShareByMask": {
+        "ash": 0.0741,
+        "ember": 0.0599,
+        "moon": 0.0364,
+        "moss": 0.288,
+        "thorn": 0.2124,
+        "veil": 0.3293
+      },
+      "intents": {
+        "usage": {
+          "bind": 0.3287,
+          "claim": 0.33,
+          "shelter": 0.3413
+        },
+        "successRate": {
+          "bind": 0.7006,
+          "claim": 0.7488,
+          "shelter": 0.5864
+        },
+        "usageByMask": {
+          "ash": {
+            "bind": 0.9901,
+            "shelter": 0.0099
+          },
+          "ember": {
+            "shelter": 1
+          },
+          "moon": {
+            "shelter": 1
+          },
+          "moss": {
+            "claim": 0.9895,
+            "shelter": 0.0105
+          },
+          "thorn": {
+            "bind": 0.9884,
+            "shelter": 0.0116
+          },
+          "veil": {
+            "claim": 0.989,
+            "shelter": 0.011
+          }
+        }
+      },
+      "focusPerMatch": {
+        "earned": 12,
+        "spent": 0
+      },
+      "oxygen": {
+        "attemptsPerMatch": 3.46,
+        "successesPerMatch": 2.43,
+        "successRate": 0.7015
+      },
+      "goldenThreadsPerMatch": 12.72,
+      "matchesWithTwoThreadLinksRate": 1,
+      "successfulNonActiveParticipationRoundRate": 1,
+      "staticByRound": {
+        "1": 4.91,
+        "2": 5.15,
+        "3": 5.29,
+        "4": 5.4,
+        "5": 5.43,
+        "6": 5.53,
+        "7": 5.48,
+        "8": 5.49,
+        "9": 5.52,
+        "10": 5.29,
+        "11": 5.45,
+        "12": 5.71,
+        "13": 5.78
+      },
+      "fracturesPerMatch": {
+        "mean": 1.54,
+        "median": 2,
+        "p10": 0,
+        "p90": 3,
+        "p95": 3
+      },
+      "finalOrbitTriggerRound": {
+        "mean": 9.41,
+        "median": 9,
+        "p10": 8,
+        "p90": 11,
+        "p95": 12
+      },
+      "vowCompletionRateByMask": {
+        "ember": 0,
+        "veil": 0.7762,
+        "thorn": 0,
+        "moon": 0,
+        "moss": 0.2388,
+        "ash": 0
+      },
+      "oracleOptionFrequency": {
+        "CARRY IT OUTWARD": 0.1739,
+        "KEEP ITS WEIGHT": 0.1653,
+        "LIVE BENEATH IT": 0.1583,
+        "NAME THE DOOR": 0.1736,
+        "NAME THE TRUTH": 0.1599,
+        "SPEND ITS WEIGHT": 0.169
+      },
+      "councilResultFrequency": {
+        "watch": 1
+      },
+      "councilVoteFrequency": {
+        "knot": 0.2748,
+        "open": 0.2748,
+        "watch": 0.4503
+      },
+      "omenFrequency": {
+        "door": 0.0663,
+        "flame": 0.2338,
+        "mirror": 0.1002,
+        "moth": 0.2654,
+        "static": 0.1351,
+        "thread": 0.1992
+      },
+      "omenMeanResolutionValue": {
+        "door": 1.469,
+        "flame": 1.968,
+        "mirror": 1.45,
+        "moth": 1.489,
+        "static": 1.015,
+        "thread": 1.48
+      },
+      "maskPowerUsesPerMatch": 2.08,
+      "relicUsesPerMatch": 0,
+      "softLockOrInvalidStateCount": 0,
+      "invalidStateReasons": {}
+    },
+    "six-heuristic": {
+      "matches": 1667,
+      "completionRate": 1,
+      "turnCount": {
+        "mean": 57.31,
+        "median": 60,
+        "p10": 48,
+        "p90": 66,
+        "p95": 66
+      },
+      "turns45To84Rate": 0.9946,
+      "victories": {
+        "playerRate": 0.9928,
+        "houseRate": 0.0072
+      },
+      "playerWinShareByMask": {
+        "ash": 0.2792,
+        "ember": 0.1607,
+        "moon": 0.2598,
+        "moss": 0.1396,
+        "thorn": 0.0906,
+        "veil": 0.0701
+      },
+      "intents": {
+        "usage": {
+          "bind": 0.2317,
+          "claim": 0.2332,
+          "shelter": 0.535
+        },
+        "successRate": {
+          "bind": 0.8873,
+          "claim": 0.9651,
+          "shelter": 0.8081
+        },
+        "usageByMask": {
+          "ash": {
+            "bind": 0.1819,
+            "claim": 0.2488,
+            "shelter": 0.5692
+          },
+          "ember": {
+            "bind": 0.2907,
+            "claim": 0.2475,
+            "shelter": 0.4617
+          },
+          "moon": {
+            "bind": 0.256,
+            "claim": 0.2279,
+            "shelter": 0.5161
+          },
+          "moss": {
+            "bind": 0.2199,
+            "claim": 0.1903,
+            "shelter": 0.5898
+          },
+          "thorn": {
+            "bind": 0.2052,
+            "claim": 0.268,
+            "shelter": 0.5267
+          },
+          "veil": {
+            "bind": 0.2365,
+            "claim": 0.2168,
+            "shelter": 0.5467
+          }
+        }
+      },
+      "focusPerMatch": {
+        "earned": 38.71,
+        "spent": 28.61
+      },
+      "oxygen": {
+        "attemptsPerMatch": 0.01,
+        "successesPerMatch": 0.01,
+        "successRate": 1
+      },
+      "goldenThreadsPerMatch": 10.96,
+      "matchesWithTwoThreadLinksRate": 1,
+      "successfulNonActiveParticipationRoundRate": 0.9998,
+      "staticByRound": {
+        "1": 3.61,
+        "2": 5.35,
+        "3": 7.12,
+        "4": 7.61,
+        "5": 7.72,
+        "6": 7.81,
+        "7": 7.74,
+        "8": 7.21,
+        "9": 6.82,
+        "10": 6.58,
+        "11": 6.38,
+        "12": 6.88,
+        "13": 4.5
+      },
+      "fracturesPerMatch": {
+        "mean": 0.94,
+        "median": 1,
+        "p10": 0,
+        "p90": 2,
+        "p95": 2
+      },
+      "finalOrbitTriggerRound": {
+        "mean": 8.56,
+        "median": 9,
+        "p10": 7,
+        "p90": 10,
+        "p95": 10
+      },
+      "vowCompletionRateByMask": {
+        "ember": 0,
+        "veil": 0,
+        "thorn": 0.1494,
+        "moon": 0.4031,
+        "moss": 0,
+        "ash": 0.9622
+      },
+      "oracleOptionFrequency": {
+        "CARRY IT OUTWARD": 0.3353,
+        "KEEP ITS WEIGHT": 0.1529,
+        "NAME THE DOOR": 0.1499,
+        "NAME THE TRUTH": 0.1804,
+        "SPEND ITS WEIGHT": 0.1815
+      },
+      "councilResultFrequency": {
+        "watch": 1
+      },
+      "councilVoteFrequency": {
+        "knot": 0.2593,
+        "open": 0.2593,
+        "watch": 0.4815
+      },
+      "omenFrequency": {
+        "door": 0.0672,
+        "flame": 0.2338,
+        "mirror": 0.1003,
+        "moth": 0.2663,
+        "static": 0.133,
+        "thread": 0.1995
+      },
+      "omenMeanResolutionValue": {
+        "door": 2.484,
+        "flame": 3.124,
+        "mirror": 2.512,
+        "moth": 2.555,
+        "static": 2.26,
+        "thread": 2.48
+      },
+      "maskPowerUsesPerMatch": 6.11,
+      "relicUsesPerMatch": 3.74,
+      "softLockOrInvalidStateCount": 0,
+      "invalidStateReasons": {}
+    },
+    "mixed": {
+      "matches": 1667,
+      "completionRate": 1,
+      "turnCount": {
+        "mean": 58.25,
+        "median": 60,
+        "p10": 51.6,
+        "p90": 66,
+        "p95": 66
+      },
+      "turns45To84Rate": 0.9874,
+      "victories": {
+        "playerRate": 0.9268,
+        "houseRate": 0.0732
+      },
+      "playerWinShareByMask": {
+        "ash": 0.0395,
+        "ember": 0.3612,
+        "moon": 0.0123,
+        "moss": 0.2278,
+        "thorn": 0.178,
+        "veil": 0.1812
+      },
+      "intents": {
+        "usage": {
+          "bind": 0.2872,
+          "claim": 0.2893,
+          "shelter": 0.4235
+        },
+        "successRate": {
+          "bind": 0.7758,
+          "claim": 0.866,
+          "shelter": 0.7051
+        },
+        "usageByMask": {
+          "ash": {
+            "bind": 0.9888,
+            "shelter": 0.0112
+          },
+          "ember": {
+            "bind": 0.303,
+            "claim": 0.2711,
+            "shelter": 0.4259
+          },
+          "moon": {
+            "shelter": 1
+          },
+          "moss": {
+            "bind": 0.2075,
+            "claim": 0.1753,
+            "shelter": 0.6172
+          },
+          "thorn": {
+            "bind": 0.2268,
+            "claim": 0.2956,
+            "shelter": 0.4776
+          },
+          "veil": {
+            "claim": 0.99,
+            "shelter": 0.01
+          }
+        }
+      },
+      "focusPerMatch": {
+        "earned": 25.81,
+        "spent": 14.6
+      },
+      "oxygen": {
+        "attemptsPerMatch": 1.46,
+        "successesPerMatch": 1.08,
+        "successRate": 0.7388
+      },
+      "goldenThreadsPerMatch": 11.68,
+      "matchesWithTwoThreadLinksRate": 1,
+      "successfulNonActiveParticipationRoundRate": 1,
+      "staticByRound": {
+        "1": 4.12,
+        "2": 5.57,
+        "3": 6.41,
+        "4": 6.25,
+        "5": 6.25,
+        "6": 6.4,
+        "7": 6.27,
+        "8": 6.21,
+        "9": 6.06,
+        "10": 5.97,
+        "11": 5.86,
+        "12": 6.31,
+        "13": 6.75
+      },
+      "fracturesPerMatch": {
+        "mean": 1.37,
+        "median": 1,
+        "p10": 0,
+        "p90": 2,
+        "p95": 3
+      },
+      "finalOrbitTriggerRound": {
+        "mean": 8.8,
+        "median": 9,
+        "p10": 8,
+        "p90": 10,
+        "p95": 10
+      },
+      "vowCompletionRateByMask": {
+        "ember": 0,
+        "veil": 0.5087,
+        "thorn": 0.1506,
+        "moon": 0,
+        "moss": 0,
+        "ash": 0
+      },
+      "oracleOptionFrequency": {
+        "CARRY IT OUTWARD": 0.2735,
+        "KEEP ITS WEIGHT": 0.1426,
+        "LIVE BENEATH IT": 0.0554,
+        "NAME THE DOOR": 0.1312,
+        "NAME THE TRUTH": 0.2036,
+        "SPEND ITS WEIGHT": 0.1937
+      },
+      "councilResultFrequency": {
+        "watch": 1
+      },
+      "councilVoteFrequency": {
+        "knot": 0.2436,
+        "open": 0.2436,
+        "watch": 0.5128
+      },
+      "omenFrequency": {
+        "door": 0.0667,
+        "flame": 0.2326,
+        "mirror": 0.0998,
+        "moth": 0.2659,
+        "static": 0.1325,
+        "thread": 0.2026
+      },
+      "omenMeanResolutionValue": {
+        "door": 1.861,
+        "flame": 2.455,
+        "mirror": 1.908,
+        "moth": 1.885,
+        "static": 1.571,
+        "thread": 1.89
+      },
+      "maskPowerUsesPerMatch": 3.03,
+      "relicUsesPerMatch": 1.9,
+      "softLockOrInvalidStateCount": 0,
+      "invalidStateReasons": {}
+    },
+    "solo-plus-bots": {
+      "matches": 1667,
+      "completionRate": 1,
+      "turnCount": {
+        "mean": 57.04,
+        "median": 54,
+        "p10": 48,
+        "p90": 66,
+        "p95": 66
+      },
+      "turns45To84Rate": 0.9916,
+      "victories": {
+        "playerRate": 0.9892,
+        "houseRate": 0.0108
+      },
+      "playerWinShareByMask": {
+        "ash": 0.2735,
+        "ember": 0.1801,
+        "moon": 0.2796,
+        "moss": 0.1189,
+        "thorn": 0.0946,
+        "veil": 0.0534
+      },
+      "intents": {
+        "usage": {
+          "bind": 0.2319,
+          "claim": 0.2342,
+          "shelter": 0.5339
+        },
+        "successRate": {
+          "bind": 0.8842,
+          "claim": 0.9652,
+          "shelter": 0.8063
+        },
+        "usageByMask": {
+          "ash": {
+            "bind": 0.1801,
+            "claim": 0.2543,
+            "shelter": 0.5656
+          },
+          "ember": {
+            "bind": 0.2879,
+            "claim": 0.2495,
+            "shelter": 0.4627
+          },
+          "moon": {
+            "bind": 0.2605,
+            "claim": 0.2282,
+            "shelter": 0.5114
+          },
+          "moss": {
+            "bind": 0.2206,
+            "claim": 0.1901,
+            "shelter": 0.5893
+          },
+          "thorn": {
+            "bind": 0.2046,
+            "claim": 0.268,
+            "shelter": 0.5274
+          },
+          "veil": {
+            "bind": 0.2377,
+            "claim": 0.2154,
+            "shelter": 0.547
+          }
+        }
+      },
+      "focusPerMatch": {
+        "earned": 38.44,
+        "spent": 28.32
+      },
+      "oxygen": {
+        "attemptsPerMatch": 0.01,
+        "successesPerMatch": 0.01,
+        "successRate": 1
+      },
+      "goldenThreadsPerMatch": 10.95,
+      "matchesWithTwoThreadLinksRate": 1,
+      "successfulNonActiveParticipationRoundRate": 0.9996,
+      "staticByRound": {
+        "1": 3.62,
+        "2": 5.31,
+        "3": 7.09,
+        "4": 7.51,
+        "5": 7.76,
+        "6": 7.94,
+        "7": 7.8,
+        "8": 7.31,
+        "9": 6.87,
+        "10": 6.44,
+        "11": 6.65,
+        "12": 6.88,
+        "13": 9
+      },
+      "fracturesPerMatch": {
+        "mean": 0.93,
+        "median": 1,
+        "p10": 0,
+        "p90": 2,
+        "p95": 2
+      },
+      "finalOrbitTriggerRound": {
+        "mean": 8.52,
+        "median": 9,
+        "p10": 7,
+        "p90": 10,
+        "p95": 10
+      },
+      "vowCompletionRateByMask": {
+        "ember": 0,
+        "veil": 0,
+        "thorn": 0.1494,
+        "moon": 0.3695,
+        "moss": 0,
+        "ash": 0.9532
+      },
+      "oracleOptionFrequency": {
+        "CARRY IT OUTWARD": 0.3357,
+        "KEEP ITS WEIGHT": 0.1482,
+        "NAME THE DOOR": 0.1456,
+        "NAME THE TRUTH": 0.1831,
+        "SPEND ITS WEIGHT": 0.1874
+      },
+      "councilResultFrequency": {
+        "watch": 1
+      },
+      "councilVoteFrequency": {
+        "knot": 0.3333,
+        "open": 0.3333,
+        "watch": 0.3333
+      },
+      "omenFrequency": {
+        "door": 0.067,
+        "flame": 0.2337,
+        "mirror": 0.1023,
+        "moth": 0.266,
+        "static": 0.133,
+        "thread": 0.198
+      },
+      "omenMeanResolutionValue": {
+        "door": 2.464,
+        "flame": 3.14,
+        "mirror": 2.476,
+        "moth": 2.565,
+        "static": 2.225,
+        "thread": 2.482
+      },
+      "maskPowerUsesPerMatch": 6.09,
+      "relicUsesPerMatch": 3.73,
+      "softLockOrInvalidStateCount": 0,
+      "invalidStateReasons": {}
+    },
+    "independent-six": {
+      "matches": 1666,
+      "completionRate": 1,
+      "turnCount": {
+        "mean": 57.03,
+        "median": 60,
+        "p10": 48,
+        "p90": 66,
+        "p95": 66
+      },
+      "turns45To84Rate": 0.988,
+      "victories": {
+        "playerRate": 0.9934,
+        "houseRate": 0.0066
+      },
+      "playerWinShareByMask": {
+        "ash": 0.232,
+        "ember": 0.2973,
+        "moon": 0.1692,
+        "moss": 0.2417,
+        "thorn": 0.0429,
+        "veil": 0.0169
+      },
+      "intents": {
+        "usage": {
+          "bind": 0.2748,
+          "claim": 0.3217,
+          "shelter": 0.4035
+        },
+        "successRate": {
+          "bind": 0.9003,
+          "claim": 0.9654,
+          "shelter": 0.8089
+        },
+        "usageByMask": {
+          "ash": {
+            "bind": 0.6654,
+            "shelter": 0.3346
+          },
+          "ember": {
+            "claim": 0.8871,
+            "shelter": 0.1129
+          },
+          "moon": {
+            "bind": 0.266,
+            "claim": 0.2343,
+            "shelter": 0.4997
+          },
+          "moss": {
+            "claim": 0.8086,
+            "shelter": 0.1914
+          },
+          "thorn": {
+            "bind": 0.7175,
+            "shelter": 0.2825
+          },
+          "veil": {
+            "shelter": 1
+          }
+        }
+      },
+      "focusPerMatch": {
+        "earned": 38.63,
+        "spent": 28.49
+      },
+      "oxygen": {
+        "attemptsPerMatch": 0.01,
+        "successesPerMatch": 0.01,
+        "successRate": 0.9565
+      },
+      "goldenThreadsPerMatch": 13.02,
+      "matchesWithTwoThreadLinksRate": 1,
+      "successfulNonActiveParticipationRoundRate": 0.9997,
+      "staticByRound": {
+        "1": 3.55,
+        "2": 5.24,
+        "3": 7.17,
+        "4": 7.57,
+        "5": 7.76,
+        "6": 7.77,
+        "7": 7.5,
+        "8": 7.35,
+        "9": 6.59,
+        "10": 6.2,
+        "11": 6.32,
+        "12": 5.95,
+        "13": 5
+      },
+      "fracturesPerMatch": {
+        "mean": 0.99,
+        "median": 1,
+        "p10": 0,
+        "p90": 2,
+        "p95": 2
+      },
+      "finalOrbitTriggerRound": {
+        "mean": 8.51,
+        "median": 9,
+        "p10": 7,
+        "p90": 10,
+        "p95": 10
+      },
+      "vowCompletionRateByMask": {
+        "ember": 0.0042,
+        "veil": 0,
+        "thorn": 0.1297,
+        "moon": 0.3932,
+        "moss": 0,
+        "ash": 0.943
+      },
+      "oracleOptionFrequency": {
+        "CARRY IT OUTWARD": 0.3259,
+        "KEEP ITS WEIGHT": 0.15,
+        "NAME THE DOOR": 0.1459,
+        "NAME THE TRUTH": 0.1895,
+        "SPEND ITS WEIGHT": 0.1887
+      },
+      "councilResultFrequency": {
+        "knot": 0.1538,
+        "open": 0.0769,
+        "watch": 0.7692
+      },
+      "councilVoteFrequency": {
+        "knot": 0.3077,
+        "open": 0.2949,
+        "watch": 0.3974
+      },
+      "omenFrequency": {
+        "door": 0.067,
+        "flame": 0.2344,
+        "mirror": 0.0988,
+        "moth": 0.2649,
+        "static": 0.1366,
+        "thread": 0.1984
+      },
+      "omenMeanResolutionValue": {
+        "door": 2.727,
+        "flame": 3.319,
+        "mirror": 2.664,
+        "moth": 2.746,
+        "static": 2.459,
+        "thread": 2.666
+      },
+      "maskPowerUsesPerMatch": 6.06,
+      "relicUsesPerMatch": 3.7,
+      "softLockOrInvalidStateCount": 0,
+      "invalidStateReasons": {}
+    },
+    "timeout-defaults": {
+      "matches": 1666,
+      "completionRate": 1,
+      "turnCount": {
+        "mean": 67.78,
+        "median": 71,
+        "p10": 54,
+        "p90": 78,
+        "p95": 78
+      },
+      "turns45To84Rate": 0.985,
+      "victories": {
+        "playerRate": 0.6903,
+        "houseRate": 0.3097
+      },
+      "playerWinShareByMask": {
+        "ash": 0.0974,
+        "ember": 0.0409,
+        "moon": 0.1617,
+        "moss": 0.0574,
+        "thorn": 0.3174,
+        "veil": 0.3252
+      },
+      "intents": {
+        "usage": {
+          "shelter": 1
+        },
+        "successRate": {
+          "shelter": 0.584
+        },
+        "usageByMask": {
+          "ash": {
+            "shelter": 1
+          },
+          "ember": {
+            "shelter": 1
+          },
+          "moon": {
+            "shelter": 1
+          },
+          "moss": {
+            "shelter": 1
+          },
+          "thorn": {
+            "shelter": 1
+          },
+          "veil": {
+            "shelter": 1
+          }
+        }
+      },
+      "focusPerMatch": {
+        "earned": 7.41,
+        "spent": 0
+      },
+      "oxygen": {
+        "attemptsPerMatch": 0,
+        "successesPerMatch": 0,
+        "successRate": 0
+      },
+      "goldenThreadsPerMatch": 0,
+      "matchesWithTwoThreadLinksRate": 0,
+      "successfulNonActiveParticipationRoundRate": 0.3748,
+      "staticByRound": {
+        "1": 4.29,
+        "2": 6.4,
+        "3": 7.21,
+        "4": 7.12,
+        "5": 7.01,
+        "6": 7.02,
+        "7": 7.16,
+        "8": 7.11,
+        "9": 7.17,
+        "10": 7.35,
+        "11": 7.33,
+        "12": 7.7,
+        "13": 7.77
+      },
+      "fracturesPerMatch": {
+        "mean": 1.8,
+        "median": 2,
+        "p10": 1,
+        "p90": 3,
+        "p95": 3
+      },
+      "finalOrbitTriggerRound": {
+        "mean": 10.27,
+        "median": 10,
+        "p10": 9,
+        "p90": 12,
+        "p95": 12
+      },
+      "vowCompletionRateByMask": {
+        "ember": 0,
+        "veil": 0.5852,
+        "thorn": 0,
+        "moon": 0,
+        "moss": 0,
+        "ash": 0
+      },
+      "oracleOptionFrequency": {
+        "CARRY IT OUTWARD": 0.2347,
+        "KEEP ITS WEIGHT": 0.0907,
+        "LIVE BENEATH IT": 0.0972,
+        "NAME THE DOOR": 0.0903,
+        "NAME THE TRUTH": 0.25,
+        "SPEND ITS WEIGHT": 0.2371
+      },
+      "councilResultFrequency": {
+        "knot": 0.0726,
+        "open": 0.523,
+        "watch": 0.4044
+      },
+      "councilVoteFrequency": {
+        "knot": 0.15,
+        "open": 0.4457,
+        "watch": 0.4044
+      },
+      "omenFrequency": {
+        "door": 0.0675,
+        "flame": 0.2335,
+        "mirror": 0.1007,
+        "moth": 0.2671,
+        "static": 0.1334,
+        "thread": 0.1978
+      },
+      "omenMeanResolutionValue": {
+        "door": 1.144,
+        "flame": 1.637,
+        "mirror": 1.185,
+        "moth": 1.128,
+        "static": 0.713,
+        "thread": 1.101
+      },
+      "maskPowerUsesPerMatch": 0,
+      "relicUsesPerMatch": 0,
+      "softLockOrInvalidStateCount": 0,
+      "invalidStateReasons": {}
+    }
+  }
+}

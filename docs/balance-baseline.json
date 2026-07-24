@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "implementation": "legacy game-core authority",
+  "generatedAt": "2026-07-24T19:55:59.234Z",
+  "durationMs": 41553,
+  "configuration": {
+    "matches": 10000,
+    "players": 6,
+    "seed": 20260725,
+    "json": "docs/balance-baseline.json",
+    "actionCap": 720,
+    "policy": "Server-owned d6, strongest immediate Oracle choice, randomized Council stones, no tactical tuning, gifting, or relic use."
+  },
+  "overall": {
+    "matches": 10000,
+    "completedBeforeActionCapRate": 0.0051,
+    "completionByCast": {
+      "45": 0,
+      "84": 0,
+      "120": 0.0014,
+      "240": 0.004
+    },
+    "completedCastCount": {
+      "mean": 192.67,
+      "median": 145,
+      "p10": 103,
+      "p90": 415,
+      "p95": 457
+    },
+    "meanSignalCollapses": 116.23,
+    "cappedWithoutWinner": 9949,
+    "guaranteedEnding": false,
+    "houseVictoryCondition": false,
+    "conditionalWinnerMaskShare": {
+      "ember": 0.8039,
+      "moon": 0.0588,
+      "moss": 0.0784,
+      "thorn": 0.0588
+    }
+  }
+}

@@ -1,22 +1,15 @@
 import crypto from "node:crypto";
+import { createCode } from "./game-core.mjs";
 import {
-  answerChoice,
-  beginGame,
-  castCouncilVote,
-  claimSeat,
-  createCode,
-  createRoom,
-  giftEcho,
-  publicRoom,
-  reconnectPlayer,
-  removeBot,
-  resolveCouncil,
-  retryTransmission,
-  rollTurn,
-  seatPlayer,
-  tuneRoll,
-  useRelic as activateRelic,
-} from "./game-core.mjs";
+  createRoomV4,
+  executeGameCommand,
+  migrateRoomState,
+  publicRoomV4,
+  reconnectPlayerV4,
+  registerSpectator,
+  seatPlayerV4,
+  settleExpiredPhase,
+} from "./game-v4.mjs";
 import { resolveRoomChannel } from "./room-channel.mjs";
 
 const ROOM_TTL = 24 * 60 * 60_000;
@@ -28,6 +21,7 @@ const FIXED_ORIGINS = new Set([
   "http://localhost:4175",
   "http://127.0.0.1:4175",
 ]);
+const rateBuckets = new Map();
 
 const CREATE_ROOMS_SQL = `
   CREATE TABLE IF NOT EXISTS obscur_rooms (
@@ -42,10 +36,7 @@ const CREATE_ROOMS_SQL = `
 function corsHeaders(request) {
   const origin = request.headers.get("origin");
   const requestOrigin = new URL(request.url).origin;
-  const allowed =
-    !origin ||
-    origin === requestOrigin ||
-    FIXED_ORIGINS.has(origin);
+  const allowed = !origin || origin === requestOrigin || FIXED_ORIGINS.has(origin);
   return {
     "access-control-allow-origin": allowed ? origin || "*" : "null",
     "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -73,26 +64,30 @@ function roomToJson(room) {
   });
 }
 
-function roomFromJson(value) {
+function roomFromJson(value, now) {
   const room = JSON.parse(value);
   room.spectators = new Set(room.spectators || []);
-  return room;
+  return migrateRoomState(room, now);
 }
 
-async function ensureSchema(db) {
+async function ensureSchema(db, now) {
   await db.prepare(CREATE_ROOMS_SQL).run();
+  await db
+    .prepare("DELETE FROM obscur_rooms WHERE expires_at <= ?")
+    .bind(now)
+    .run();
 }
 
-async function loadRoom(db, code) {
+async function loadRoom(db, code, now) {
   const row = await db
     .prepare(
       "SELECT state, version FROM obscur_rooms WHERE code = ? AND expires_at > ?",
     )
-    .bind(code, Date.now())
+    .bind(code, now)
     .first();
   if (!row) return null;
   return {
-    room: roomFromJson(row.state),
+    room: roomFromJson(row.state, now),
     version: Number(row.version),
   };
 }
@@ -120,30 +115,42 @@ async function saveRoom(db, room, version, now) {
   return version + 1;
 }
 
-export function settleRoom(room, now) {
-  if (room.status !== "playing") return false;
+function requestIdentity(request, action, payload) {
+  const forwarded = request.headers.get("cf-connecting-ip");
+  const fallback = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = forwarded || fallback || "unknown";
+  return `${ip}:${action}:${String(payload.code || "").slice(0, 5)}`;
+}
 
-  const active = room.players[room.currentSeat];
-  const expired = Boolean(room.deadline && now >= room.deadline);
-  const botTurn = Boolean(active?.bot);
-  if (!expired && !botTurn) return false;
-
-  if (room.pendingCouncil) {
-    if (!expired) return false;
-    resolveCouncil(room, now, true);
-  } else if (room.pendingChoice) {
-    if (!expired && !room.players[room.pendingChoice.seat]?.bot) return false;
-    answerChoice(room, null, room.pendingChoice.event.choices[0].id, {
-      automated: true,
-      now,
-    });
-  } else {
-    // Resolve only one landing per request. The HTTP client polls for the next
-    // canonical snapshot, so advancing through several bots here would replace
-    // intermediate activeTransmission values before any client could stage them.
-    rollTurn(room, null, { automated: true, now });
+function enforceRateLimit(request, action, payload, now) {
+  const key = requestIdentity(request, action, payload);
+  const createOrJoin = action === "create_room" || action === "join_room";
+  const windowMs = createOrJoin ? 60_000 : 10_000;
+  const limit = createOrJoin ? 24 : 80;
+  const bucket = rateBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= windowMs) {
+    rateBuckets.set(key, { startedAt: now, count: 1 });
+    return;
   }
-  return true;
+  bucket.count += 1;
+  if (bucket.count > limit) {
+    throw new Error("Too many commands reached the table. Wait a moment.");
+  }
+  if (rateBuckets.size > 2_000) {
+    for (const [candidate, value] of rateBuckets) {
+      if (now - value.startedAt > 60_000) rateBuckets.delete(candidate);
+    }
+  }
+}
+
+function tokenBelongsToRoom(room, token) {
+  if (!token) return false;
+  if (room.players.some((player) => player?.token === token)) return true;
+  return Boolean(room.spectatorSessions?.[token]);
+}
+
+export function settleRoom(room, now, options = {}) {
+  return settleExpiredPhase(room, now, options);
 }
 
 function requireRoom(loaded) {
@@ -158,16 +165,17 @@ async function createNewRoom(db, name, youtubeChannelUrl, now, env) {
   });
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const code = createCode();
-    const room = createRoom(code, now, youtubeChannel);
-    const player = seatPlayer(room, { name });
+    const room = createRoomV4(code, now, youtubeChannel);
+    const player = seatPlayerV4(room, { name }, now);
     try {
       await insertRoom(db, room, now);
       return {
         ok: true,
+        protocol: "sixfold-road-http-v4",
         code,
         token: player.token,
         playerId: player.id,
-        state: publicRoom(room, now),
+        state: publicRoomV4(room, now),
       };
     } catch (error) {
       if (!String(error).toLowerCase().includes("unique")) throw error;
@@ -180,7 +188,8 @@ async function runAction(db, action, payload, now, env) {
   if (action === "health") {
     return {
       ok: true,
-      protocol: "sixfold-road-http-v2",
+      protocol: "sixfold-road-http-v4",
+      rulesVersion: 4,
       channelInput: true,
       youtubeApiConfigured: Boolean(env.YOUTUBE_API_KEY),
     };
@@ -196,118 +205,156 @@ async function runAction(db, action, payload, now, env) {
   }
 
   const code = String(payload.code || "").toUpperCase().trim();
-  const loaded = requireRoom(await loadRoom(db, code));
+  const loaded = requireRoom(await loadRoom(db, code, now));
   const { room } = loaded;
   let version = loaded.version;
 
-  // A receiver error refers to the currently staged landing. Route it before
-  // automatic bot settlement has a chance to replace that transmission.
-  if (action === "reject_transmission") {
-    retryTransmission(
-      room,
-      String(payload.transmissionId || ""),
-      String(payload.videoId || ""),
-      { now },
-    );
-    version = await saveRoom(db, room, version, now);
-    return { ok: true, code, state: publicRoom(room, now), version };
-  }
-
-  const settled = settleRoom(room, now);
-
   if (action === "get_state") {
+    const settled = settleRoom(room, now);
     if (settled) version = await saveRoom(db, room, version, now);
-    return { ok: true, code, state: publicRoom(room, now), version };
+    return {
+      ok: true,
+      protocol: "sixfold-road-http-v4",
+      code,
+      state: publicRoomV4(room, now),
+      version,
+    };
   }
 
   if (action === "join_room") {
     const returning = payload.token
-      ? reconnectPlayer(room, payload.token, null)
+      ? reconnectPlayerV4(room, payload.token, null, now)
       : null;
     if (returning) {
-      await saveRoom(db, room, version, now);
+      version = await saveRoom(db, room, version, now);
       return {
         ok: true,
+        protocol: "sixfold-road-http-v4",
         code,
         token: returning.token,
         playerId: returning.id,
-        state: publicRoom(room, now),
+        state: publicRoomV4(room, now),
         reconnected: true,
+        version,
       };
     }
-
-    try {
-      const player = seatPlayer(room, { name: payload.name });
-      await saveRoom(db, room, version, now);
+    const returningSpectator =
+      payload.token && room.spectatorSessions?.[payload.token]
+        ? registerSpectator(room, {
+            name: payload.name,
+            token: payload.token,
+          }, now)
+        : null;
+    if (returningSpectator) {
+      version = await saveRoom(db, room, version, now);
       return {
         ok: true,
+        protocol: "sixfold-road-http-v4",
+        code,
+        token: returningSpectator.token,
+        playerId: null,
+        spectator: true,
+        reconnected: true,
+        state: publicRoomV4(room, now),
+        version,
+      };
+    }
+    try {
+      const player = seatPlayerV4(room, { name: payload.name }, now);
+      version = await saveRoom(db, room, version, now);
+      return {
+        ok: true,
+        protocol: "sixfold-road-http-v4",
         code,
         token: player.token,
         playerId: player.id,
-        state: publicRoom(room, now),
+        state: publicRoomV4(room, now),
+        version,
       };
     } catch {
-      if (settled) await saveRoom(db, room, version, now);
+      const spectator = registerSpectator(room, { name: payload.name }, now);
+      version = await saveRoom(db, room, version, now);
       return {
         ok: true,
+        protocol: "sixfold-road-http-v4",
         code,
-        token: null,
+        token: spectator.token,
         playerId: null,
         spectator: true,
-        state: publicRoom(room, now),
+        state: publicRoomV4(room, now),
+        version,
       };
     }
   }
 
-  switch (action) {
-    case "start_game":
-      beginGame(room, payload.token, now);
-      break;
-    case "claim_seat":
-      claimSeat(room, payload.token, Number(payload.seat));
-      break;
-    case "add_bot": {
-      if (room.hostToken !== payload.token) {
-        throw new Error("Only the table keeper can call an Echo.");
-      }
-      if (room.status !== "lobby") {
-        throw new Error("The crossing has already begun.");
-      }
-      const count = room.players.filter((player) => player?.bot).length;
-      seatPlayer(room, {
+  if (action === "add_bot") {
+    if (room.hostToken !== payload.token) {
+      throw new Error("Only the table keeper can call an Echo.");
+    }
+    if (room.status !== "lobby") {
+      throw new Error("The crossing has already begun.");
+    }
+    const count = room.players.filter((player) => player?.bot).length;
+    seatPlayerV4(
+      room,
+      {
         name: BOT_NAMES[count % BOT_NAMES.length],
         token: `bot-${crypto.randomUUID()}`,
         bot: true,
-      });
-      break;
-    }
-    case "remove_bot":
-      removeBot(room, payload.token, Number(payload.seat));
-      break;
-    case "roll":
-      rollTurn(room, payload.token, { now });
-      break;
-    case "tune_roll":
-      tuneRoll(room, payload.token, Number(payload.amount));
-      break;
-    case "use_relic":
-      activateRelic(room, payload.token, String(payload.relicId || ""));
-      break;
-    case "gift_echo":
-      giftEcho(room, payload.token, Number(payload.targetSeat));
-      break;
-    case "answer_choice":
-      answerChoice(room, payload.token, String(payload.choiceId || ""), { now });
-      break;
-    case "vote_council":
-      castCouncilVote(room, payload.token, String(payload.choiceId || ""), now);
-      break;
-    default:
-      throw new Error("The authority does not recognize that move.");
+      },
+      now,
+    );
+    version = await saveRoom(db, room, version, now);
+    return {
+      ok: true,
+      protocol: "sixfold-road-http-v4",
+      code,
+      state: publicRoomV4(room, now),
+      version,
+    };
   }
 
-  await saveRoom(db, room, version, now);
-  return { ok: true, code, state: publicRoom(room, now) };
+  if (!tokenBelongsToRoom(room, payload.token)) {
+    throw new Error("This session does not belong to the table.");
+  }
+
+  if (action === "reject_transmission") {
+    const command = executeGameCommand(room, action, payload, { now });
+    version = await saveRoom(db, room, version, now);
+    return {
+      ok: true,
+      protocol: "sixfold-road-http-v4",
+      code,
+      duplicate: command.duplicate,
+      state: publicRoomV4(room, now),
+      version,
+    };
+  }
+
+  const settled = settleRoom(room, now);
+  if (settled) {
+    version = await saveRoom(db, room, version, now);
+    return {
+      ok: false,
+      protocol: "sixfold-road-http-v4",
+      code,
+      settled: true,
+      error: "The authority advanced an expired phase. Review the new state.",
+      state: publicRoomV4(room, now),
+      version,
+    };
+  }
+
+  const command = executeGameCommand(room, action, payload, { now });
+  version = await saveRoom(db, room, version, now);
+  return {
+    ok: true,
+    protocol: "sixfold-road-http-v4",
+    code,
+    duplicate: command.duplicate,
+    state: publicRoomV4(room, now),
+    version,
+  };
 }
 
 export async function handleAuthorityRequest(request, env) {
@@ -318,23 +365,25 @@ export async function handleAuthorityRequest(request, env) {
     return json(request, { ok: false, error: "Room storage is unavailable." }, 503);
   }
   if (request.method === "GET") {
-    return json(request, { ok: true, protocol: "sixfold-road-http-v1" });
+    return json(request, {
+      ok: true,
+      protocol: "sixfold-road-http-v4",
+      rulesVersion: 4,
+    });
   }
   if (request.method !== "POST") {
     return json(request, { ok: false, error: "Method not allowed." }, 405);
   }
 
   try {
-    await ensureSchema(env.DB);
+    const now = Date.now();
+    await ensureSchema(env.DB, now);
     const body = await request.json();
-    const result = await runAction(
-      env.DB,
-      String(body.action || ""),
-      body.payload || {},
-      Date.now(),
-      env,
-    );
-    return json(request, result);
+    const action = String(body.action || "");
+    const payload = body.payload || {};
+    enforceRateLimit(request, action, payload, now);
+    const result = await runAction(env.DB, action, payload, now, env);
+    return json(request, result, result.ok === false ? 409 : 200);
   } catch (error) {
     return json(
       request,

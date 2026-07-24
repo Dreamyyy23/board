@@ -1,25 +1,16 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { Server } from "socket.io";
+import { TURN_MS, createCode } from "./game-core.mjs";
 import {
-  TURN_MS,
-  answerChoice,
-  beginGame,
-  castCouncilVote,
-  claimSeat,
-  createCode,
-  createRoom,
-  giftEcho,
-  publicRoom,
-  reconnectPlayer,
-  removeBot,
-  resolveCouncil,
-  retryTransmission,
-  rollTurn,
-  seatPlayer,
-  tuneRoll,
-  useRelic,
-} from "./game-core.mjs";
+  createRoomV4,
+  executeGameCommand,
+  publicRoomV4,
+  reconnectPlayerV4,
+  registerSpectator,
+  seatPlayerV4,
+  settleExpiredPhase,
+} from "./game-v4.mjs";
 import { resolveRoomChannel } from "./room-channel.mjs";
 
 const PORT = Number(process.env.GAME_PORT || 3001);
@@ -34,7 +25,8 @@ const server = http.createServer((request, response) => {
       JSON.stringify({
         ok: true,
         rooms: rooms.size,
-        protocol: "sixfold-road-v3",
+        protocol: "sixfold-road-v4",
+        rulesVersion: 4,
         channelInput: true,
         youtubeApiConfigured: Boolean(process.env.YOUTUBE_API_KEY),
       }),
@@ -48,7 +40,7 @@ const server = http.createServer((request, response) => {
 const allowedOrigins = new Set(
   (
     process.env.CLIENT_ORIGINS ||
-    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:4175,http://127.0.0.1:4175,https://dreamyyy23.github.io"
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3100,http://127.0.0.1:3100,http://localhost:3102,http://127.0.0.1:3102,http://localhost:4175,http://127.0.0.1:4175,https://dreamyyy23.github.io"
   )
     .split(",")
     .map((value) => value.trim()),
@@ -65,7 +57,7 @@ const io = new Server(server, {
 });
 
 function emitRoom(room) {
-  io.to(room.code).emit("room_state", publicRoom(room));
+  io.to(room.code).emit("room_state", publicRoomV4(room));
 }
 
 function callbackError(callback, error) {
@@ -75,47 +67,50 @@ function callbackError(callback, error) {
   });
 }
 
-function track(socket, room, player = null, spectator = false) {
+function track(socket, room, { player = null, spectator = null } = {}) {
   socket.join(room.code);
   socketMembership.set(socket.id, {
     roomCode: room.code,
-    token: player?.token || null,
-    spectator,
+    token: player?.token || spectator?.token || null,
+    playerId: player?.id || null,
+    spectator: Boolean(spectator),
   });
   if (spectator) room.spectators.add(socket.id);
 }
 
-function scheduleBot(room) {
+function scheduleAuthority(room) {
   if (room.status !== "playing") return;
-  const active = room.players[room.currentSeat];
-  if (!active?.bot) return;
   const expectedTurn = room.turnNumber;
+  const expectedPhase = room.phase;
   setTimeout(() => {
     if (
       room.status !== "playing" ||
       room.turnNumber !== expectedTurn ||
-      !room.players[room.currentSeat]?.bot
+      room.phase !== expectedPhase
     ) {
       return;
     }
     try {
-      if (room.pendingChoice) {
-        const choice = room.pendingChoice.event.choices[0];
-        answerChoice(room, null, choice.id, { automated: true });
-      } else {
-        rollTurn(room, null, { automated: true });
+      if (settleExpiredPhase(room, Date.now())) {
+        emitRoom(room);
+        scheduleAuthority(room);
       }
-      emitRoom(room);
-      scheduleBot(room);
     } catch {
-      // The one-second authority tick will recover an interrupted bot.
+      // The one-second authority tick retries interrupted bot/timeout work.
     }
-  }, 1_500);
+  }, 900);
+}
+
+function roomFor(payload) {
+  const room = rooms.get(String(payload.code || "").toUpperCase());
+  if (!room) throw new Error("The table is gone.");
+  return room;
 }
 
 io.on("connection", (socket) => {
   socket.emit("server_hello", {
-    protocol: "sixfold-road-v2",
+    protocol: "sixfold-road-v4",
+    rulesVersion: 4,
     turnMs: TURN_MS,
   });
 
@@ -126,19 +121,20 @@ io.on("connection", (socket) => {
         { apiKey: process.env.YOUTUBE_API_KEY },
       );
       const code = createCode(new Set(rooms.keys()));
-      const room = createRoom(code, Date.now(), youtubeChannel);
+      const room = createRoomV4(code, Date.now(), youtubeChannel);
       rooms.set(code, room);
-      const player = seatPlayer(room, {
+      const player = seatPlayerV4(room, {
         name: payload.name,
         socketId: socket.id,
       });
-      track(socket, room, player);
+      track(socket, room, { player });
       callback?.({
         ok: true,
+        protocol: "sixfold-road-v4",
         code,
         token: player.token,
         playerId: player.id,
-        state: publicRoom(room),
+        state: publicRoomV4(room),
       });
       emitRoom(room);
     } catch (error) {
@@ -153,71 +149,80 @@ io.on("connection", (socket) => {
       if (!room) throw new Error("No table answered that room code.");
 
       const returning = payload.token
-        ? reconnectPlayer(room, payload.token, socket.id)
+        ? reconnectPlayerV4(room, payload.token, socket.id)
         : null;
       if (returning) {
-        track(socket, room, returning);
+        track(socket, room, { player: returning });
         callback?.({
           ok: true,
+          protocol: "sixfold-road-v4",
           code,
           token: returning.token,
           playerId: returning.id,
-          state: publicRoom(room),
+          state: publicRoomV4(room),
           reconnected: true,
         });
         emitRoom(room);
         return;
       }
 
+      const priorSpectator =
+        payload.token && room.spectatorSessions?.[payload.token]
+          ? registerSpectator(
+              room,
+              {
+                name: payload.name,
+                token: payload.token,
+                socketId: socket.id,
+              },
+            )
+          : null;
+      if (priorSpectator) {
+        track(socket, room, { spectator: priorSpectator });
+        callback?.({
+          ok: true,
+          protocol: "sixfold-road-v4",
+          code,
+          token: priorSpectator.token,
+          playerId: null,
+          spectator: true,
+          reconnected: true,
+          state: publicRoomV4(room),
+        });
+        emitRoom(room);
+        return;
+      }
+
       try {
-        const player = seatPlayer(room, {
+        const player = seatPlayerV4(room, {
           name: payload.name,
           socketId: socket.id,
         });
-        track(socket, room, player);
+        track(socket, room, { player });
         callback?.({
           ok: true,
+          protocol: "sixfold-road-v4",
           code,
           token: player.token,
           playerId: player.id,
-          state: publicRoom(room),
+          state: publicRoomV4(room),
         });
       } catch {
-        track(socket, room, null, true);
+        const spectator = registerSpectator(room, {
+          name: payload.name,
+          socketId: socket.id,
+        });
+        track(socket, room, { spectator });
         callback?.({
           ok: true,
+          protocol: "sixfold-road-v4",
           code,
-          token: null,
+          token: spectator.token,
           playerId: null,
           spectator: true,
-          state: publicRoom(room),
+          state: publicRoomV4(room),
         });
       }
-      emitRoom(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
-
-  socket.on("start_game", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      beginGame(room, payload.token);
-      callback?.({ ok: true });
-      emitRoom(room);
-      scheduleBot(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
-
-  socket.on("claim_seat", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      const player = claimSeat(room, payload.token, Number(payload.seat));
-      callback?.({ ok: true, playerId: player.id });
       emitRoom(room);
     } catch (error) {
       callbackError(callback, error);
@@ -226,133 +231,87 @@ io.on("connection", (socket) => {
 
   socket.on("add_bot", (payload = {}, callback) => {
     try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
+      const room = roomFor(payload);
       if (room.hostToken !== payload.token) {
         throw new Error("Only the table keeper can call an Echo.");
       }
       if (room.status !== "lobby") {
         throw new Error("The crossing has already begun.");
       }
-      const existingBots = room.players.filter((player) => player?.bot).length;
-      seatPlayer(room, {
-        name: botNames[existingBots % botNames.length],
+      const count = room.players.filter((player) => player?.bot).length;
+      seatPlayerV4(room, {
+        name: botNames[count % botNames.length],
         token: `bot-${crypto.randomUUID()}`,
         bot: true,
       });
-      callback?.({ ok: true });
+      callback?.({ ok: true, state: publicRoomV4(room) });
       emitRoom(room);
     } catch (error) {
       callbackError(callback, error);
     }
   });
 
-  socket.on("remove_bot", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      removeBot(room, payload.token, Number(payload.seat));
-      callback?.({ ok: true });
-      emitRoom(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
+  const mutationEvents = [
+    "start_game",
+    "claim_seat",
+    "remove_bot",
+    "leave_seat",
+    "select_intent",
+    "submit_prediction",
+    "cast",
+    "roll",
+    "bend",
+    "tune_roll",
+    "give_oxygen",
+    "use_mask_power",
+    "use_relic",
+    "gift_echo",
+    "answer_choice",
+    "vote_council",
+    "set_streamer_mode",
+  ];
 
-  socket.on("roll", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      rollTurn(room, payload.token);
-      callback?.({ ok: true });
-      emitRoom(room);
-      scheduleBot(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
+  for (const event of mutationEvents) {
+    socket.on(event, (payload = {}, callback) => {
+      try {
+        const room = roomFor(payload);
+        const membership = socketMembership.get(socket.id);
+        if (
+          !membership ||
+          membership.roomCode !== room.code ||
+          (payload.token && membership.token !== payload.token)
+        ) {
+          throw new Error("This session does not belong to the table.");
+        }
+        const response = executeGameCommand(room, event, payload);
+        const state = publicRoomV4(room);
+        callback?.({
+          ok: true,
+          duplicate: response.duplicate,
+          state,
+        });
+        emitRoom(room);
+        scheduleAuthority(room);
+      } catch (error) {
+        callbackError(callback, error);
+      }
+    });
+  }
 
   socket.on("reject_transmission", (payload = {}, callback) => {
     try {
+      const room = roomFor(payload);
       const membership = socketMembership.get(socket.id);
-      const room = rooms.get(payload.code);
-      if (!room || membership?.roomCode !== room.code) {
-        throw new Error("The table is gone.");
+      if (!membership || membership.roomCode !== room.code) {
+        throw new Error("This session does not belong to the table.");
       }
-      retryTransmission(
-        room,
-        String(payload.transmissionId || ""),
-        String(payload.videoId || ""),
-      );
-      const state = publicRoom(room);
-      callback?.({ ok: true, state });
+      const response = executeGameCommand(room, "reject_transmission", {
+        ...payload,
+        token: membership.token,
+      });
+      const state = publicRoomV4(room);
+      callback?.({ ok: true, duplicate: response.duplicate, state });
       emitRoom(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
-
-  socket.on("tune_roll", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      tuneRoll(room, payload.token, Number(payload.amount));
-      callback?.({ ok: true });
-      emitRoom(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
-
-  socket.on("use_relic", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      useRelic(room, payload.token, String(payload.relicId || ""));
-      callback?.({ ok: true });
-      emitRoom(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
-
-  socket.on("gift_echo", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      giftEcho(room, payload.token, Number(payload.targetSeat));
-      callback?.({ ok: true });
-      emitRoom(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
-
-  socket.on("answer_choice", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      answerChoice(room, payload.token, payload.choiceId);
-      callback?.({ ok: true });
-      emitRoom(room);
-      scheduleBot(room);
-    } catch (error) {
-      callbackError(callback, error);
-    }
-  });
-
-  socket.on("vote_council", (payload = {}, callback) => {
-    try {
-      const room = rooms.get(payload.code);
-      if (!room) throw new Error("The table is gone.");
-      const resolved = castCouncilVote(
-        room,
-        payload.token,
-        String(payload.choiceId || ""),
-      );
-      callback?.({ ok: true, resolved });
-      emitRoom(room);
-      if (resolved) scheduleBot(room);
     } catch (error) {
       callbackError(callback, error);
     }
@@ -366,6 +325,11 @@ io.on("connection", (socket) => {
     if (!room) return;
     if (membership.spectator) {
       room.spectators.delete(socket.id);
+      const spectator = room.spectatorSessions[membership.token];
+      if (spectator) {
+        spectator.online = false;
+        spectator.socketId = null;
+      }
     } else {
       const player = room.players.find(
         (candidate) => candidate?.token === membership.token,
@@ -382,31 +346,22 @@ io.on("connection", (socket) => {
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
-    if (room.status === "playing" && room.deadline && now >= room.deadline) {
-      try {
-        if (room.pendingCouncil) {
-          resolveCouncil(room, now, true);
-        } else if (room.pendingChoice) {
-          answerChoice(room, null, room.pendingChoice.event.choices[0].id, {
-            now,
-            automated: true,
-          });
-        } else {
-          rollTurn(room, null, { now, automated: true });
-        }
+    try {
+      if (room.status === "playing") {
+        if (settleExpiredPhase(room, now)) scheduleAuthority(room);
         emitRoom(room);
-        scheduleBot(room);
-      } catch {
-        // Leave state untouched; the next tick can retry.
       }
-    } else if (room.status === "playing") {
-      emitRoom(room);
+    } catch {
+      // A later tick or valid command can recover the serialized phase.
     }
 
-    const empty =
-      room.players.every((player) => !player || player.bot) &&
-      room.spectators.size === 0;
-    if (empty && now - room.createdAt > 30 * 60_000) rooms.delete(code);
+    const noHumans = room.players.every((player) => !player || player.bot);
+    const noAudience = Object.values(room.spectatorSessions || {}).every(
+      (spectator) => spectator.online === false,
+    );
+    if (noHumans && noAudience && now - room.createdAt > 30 * 60_000) {
+      rooms.delete(code);
+    }
   }
 }, 1_000);
 

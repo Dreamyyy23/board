@@ -18,14 +18,20 @@ import { CommandRail } from "./components/command-rail";
 import { MaskPortrait } from "./components/mask-portrait";
 import { SeatRail } from "./components/seat-rail";
 import { SupportPortal } from "./components/support-portal";
-import type { RoomState, ServerReply, Session } from "./game-types";
+import type {
+  Intent,
+  RoomState,
+  ServerReply,
+  Session,
+  SpaceClass,
+} from "./game-types";
 
 const SERVER_URL =
   process.env.NEXT_PUBLIC_GAME_SERVER_URL || "http://localhost:3001";
 const HTTP_AUTHORITY = SERVER_URL.endsWith("/api/authority");
 const SESSION_KEY = "obscur-sixfold-session";
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/@FoxyAlchemyStudio";
-type AuthorityMode = "unknown" | "v1" | "v2";
+type AuthorityMode = "unknown" | "v1" | "v2" | "v4";
 
 const CREATOR_CHANNELS = [
   {
@@ -59,12 +65,12 @@ const CREATOR_CHANNELS = [
 ] as const;
 
 const MASK_PREVIEWS = [
-  ["EMBER", "Echoes burn brighter"],
-  ["VEIL", "The first Snare misses"],
-  ["THORN", "Rifts reach farther"],
-  ["MOON", "Archives restore Focus"],
-  ["MOSS", "The Hearth restores Resolve"],
-  ["ASH", "Every landing calms Static"],
+  ["EMBER", "Kindle the first Echo"],
+  ["VEIL", "Unmake the first Snare"],
+  ["THORN", "Rifts carry four Echoes"],
+  ["MOON", "Hear Archives twice"],
+  ["MOSS", "Tend the returning Hearth"],
+  ["ASH", "Quiet every landing"],
 ];
 
 async function requestAuthority(
@@ -83,7 +89,17 @@ async function requestAuthority(
   return reply;
 }
 
-function playTone(kind: "turn" | "roll" | "error" | "collapse") {
+function playTone(
+  kind:
+    | "turn"
+    | "roll"
+    | "bend"
+    | "oxygen"
+    | "key"
+    | "error"
+    | "fracture"
+    | "victory",
+) {
   if (typeof window === "undefined") return;
   const AudioContextClass =
     window.AudioContext ||
@@ -94,26 +110,43 @@ function playTone(kind: "turn" | "roll" | "error" | "collapse") {
   const oscillator = context.createOscillator();
   const gain = context.createGain();
   oscillator.type =
-    kind === "error" || kind === "collapse" ? "sawtooth" : "sine";
-  const start =
-    kind === "roll" ? 164 : kind === "turn" ? 246 : kind === "collapse" ? 72 : 92;
-  const end =
-    kind === "roll" ? 392 : kind === "turn" ? 329 : kind === "collapse" ? 38 : 58;
+    kind === "error" || kind === "fracture"
+      ? "sawtooth"
+      : kind === "key" || kind === "victory"
+        ? "triangle"
+        : "sine";
+  const frequencies = {
+    turn: [246, 329],
+    roll: [164, 392],
+    bend: [330, 218],
+    oxygen: [238, 492],
+    key: [392, 784],
+    error: [92, 58],
+    fracture: [72, 38],
+    victory: [294, 659],
+  } as const;
+  const [start, end] = frequencies[kind];
+  const duration =
+    kind === "fracture" || kind === "victory"
+      ? 0.82
+      : kind === "oxygen" || kind === "key"
+        ? 0.52
+        : 0.36;
   oscillator.frequency.setValueAtTime(start, context.currentTime);
   oscillator.frequency.exponentialRampToValueAtTime(
     end,
-    context.currentTime + (kind === "collapse" ? 0.65 : 0.18),
+    context.currentTime + duration * 0.76,
   );
   gain.gain.setValueAtTime(0.0001, context.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.11, context.currentTime + 0.02);
   gain.gain.exponentialRampToValueAtTime(
     0.0001,
-    context.currentTime + (kind === "collapse" ? 0.8 : 0.35),
+    context.currentTime + duration,
   );
   oscillator.connect(gain);
   gain.connect(context.destination);
   oscillator.start();
-  oscillator.stop(context.currentTime + (kind === "collapse" ? 0.82 : 0.36));
+  oscillator.stop(context.currentTime + duration + 0.02);
   oscillator.addEventListener("ended", () => void context.close());
 }
 
@@ -172,9 +205,9 @@ function EntryScreen({
         <h1>OBSCUR</h1>
         <h2>THE SIXFOLD ROAD</h2>
         <p>
-          Six masks share one authority. Tune the bone, fulfill your vow,
-          survive the Static, and return to the Hearth carrying thirteen
-          Echoes and an Alabaster Key.
+          Six masks share one authority. Read six roads, declare your Intent,
+          Witness another cast, Bend the bone, and keep each other breathing
+          long enough to survive the Final Orbit.
         </p>
         <div className="entry-objective" aria-label="Victory condition">
           <span><b>13</b> Echoes</span>
@@ -184,10 +217,10 @@ function EntryScreen({
           <span><b>1</b> Full Circuit</span>
         </div>
         <div className="entry-laws">
-          <span><b>01</b> Twenty-second turns</span>
-          <span><b>02</b> One server-owned die</span>
-          <span><b>03</b> Six asymmetric masks</span>
-          <span><b>04</b> A table that votes back</span>
+          <span><b>01</b> Read · Intent · Cast</span>
+          <span><b>02</b> Server-owned Bend windows</span>
+          <span><b>03</b> Oxygen and Golden Threads</span>
+          <span><b>04</b> Final Orbit before escape</span>
         </div>
       </section>
 
@@ -363,6 +396,42 @@ function RulesModal({
   room: RoomState;
   onClose: () => void;
 }) {
+  const modalRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const prior = document.activeElement as HTMLElement | null;
+    const modal = modalRef.current;
+    modal?.querySelector<HTMLElement>("button")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !modal) return;
+      const focusable = Array.from(
+        modal.querySelectorAll<HTMLElement>(
+          'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute("disabled"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      prior?.focus();
+    };
+  }, [onClose]);
+
   return (
     <div className="rules-backdrop" role="presentation">
       <section
@@ -370,6 +439,7 @@ function RulesModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="rules-title"
+        ref={modalRef}
       >
         <button
           className="rules-close"
@@ -379,48 +449,48 @@ function RulesModal({
         >
           ×
         </button>
-        <span className="brand-kicker">THE TABLE LAW · PROTOCOL V2</span>
+        <span className="brand-kicker">THE TABLE LAW · RULES V4</span>
         <h2 id="rules-title">Cross the road. Return changed.</h2>
         <p className="rules-lead">
-          The first player to finish a circuit while carrying thirteen Echoes
-          and an Alabaster Key wins. Everything else is how the table interferes.
+          Qualify with a circuit, thirteen Echoes, and an Alabaster Key. Finish
+          the round, survive one Final Orbit, then win by visible tiebreakers.
         </p>
 
         <div className="rules-grid">
           <article>
             <span>TURN</span>
-            <h3>Twenty seconds</h3>
-            <p>Spend Focus, use relics, or gift one Echo before casting. On timeout, the authority casts for you.</p>
+            <h3>Read, intend, cast</h3>
+            <p>Read six broad destination classes, choose CLAIM, SHELTER, or BIND, then let the authority cast.</p>
           </article>
           <article>
             <span>FOCUS</span>
-            <h3>Tune the bone</h3>
-            <p>Spend one Focus to move the final server-generated result exactly one edge higher or lower.</p>
+            <h3>Bend after the cast</h3>
+            <p>See the natural result first. Spend one Focus during the five-second Bend window to move one edge.</p>
           </article>
           <article>
             <span>RESOLVE</span>
-            <h3>Keep your shape</h3>
-            <p>Some encounters consume Resolve. Wards cancel an entire harmful consequence before breaking.</p>
+            <h3>Give Oxygen</h3>
+            <p>A helper may pay Resolve, then Echo, to prevent harm and form a visible Golden Thread.</p>
           </article>
           <article>
             <span>STATIC</span>
             <h3>Shared pressure</h3>
-            <p>Static belongs to the whole room. At twelve it collapses, taking two Echoes from every unwarded mask.</p>
+            <p>At twelve, Static Fractures, installs one round law, and resets. The third Fracture gives the House victory.</p>
           </article>
           <article>
             <span>VOWS</span>
-            <h3>Your private route</h3>
-            <p>Every mask begins with a public vow. Complete it for five Echoes and one Focus.</p>
+            <h3>Chosen behavior</h3>
+            <p>Vows are public and behavioral. Completion grants three Echoes, one Focus, and recharges the active.</p>
           </article>
           <article>
             <span>COUNCIL</span>
-            <h3>One table, six votes</h3>
-            <p>Council spaces stop the road until every occupied mask votes or the authority closes the ballot.</p>
+            <h3>Hidden stones</h3>
+            <p>The table shows who voted, never how, until stones reveal one by one in seat order.</p>
           </article>
           <article>
             <span>TRANSMISSION</span>
-            <h3>Every landing broadcasts</h3>
-            <p>Every resolved space draws one public upload from the room&apos;s bound channel and stages it for every player and spectator. Rejected embeds fail forward.</p>
+            <h3>Every landing leaves an Omen</h3>
+            <p>The accepted upload deterministically names an Omen for the next ordinary turn. Rejected embeds fail forward.</p>
           </article>
         </div>
 
@@ -433,6 +503,11 @@ function RulesModal({
                 <div>
                   <strong>{mask.name} · {mask.title}</strong>
                   <p>{mask.passive}</p>
+                  {mask.active && (
+                    <small>
+                      {mask.active.title} · {mask.active.description}
+                    </small>
+                  )}
                 </div>
               </article>
             ))}
@@ -452,11 +527,11 @@ export function GameClient() {
   const socketRef = useRef<Socket | null>(null);
   const compatibilityRef = useRef(createAuthorityCompatibility());
   const authorityModeRef = useRef<AuthorityMode>(
-    HTTP_AUTHORITY ? "unknown" : "v2",
+    HTTP_AUTHORITY ? "unknown" : "v4",
   );
   const [connected, setConnected] = useState(false);
   const [authorityMode, setAuthorityMode] = useState<AuthorityMode>(
-    HTTP_AUTHORITY ? "unknown" : "v2",
+    HTTP_AUTHORITY ? "unknown" : "v4",
   );
   const [room, setRoom] = useState<RoomState | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -470,11 +545,24 @@ export function GameClient() {
   const [sound, setSound] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [broadcastMode] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("broadcast") === "1",
+  );
   const openSupport = useCallback(() => setSupportOpen(true), []);
   const closeSupport = useCallback(() => setSupportOpen(false), []);
   const lastRollRef = useRef<string>("");
+  const naturalRollRef = useRef<string>("");
   const lastTurnRef = useRef<number | null>(null);
   const collapseRef = useRef(0);
+  const eventCueRef = useRef<string>("");
+  const commandSequenceRef = useRef(0);
+
+  const nextCommandId = useCallback((action: string) => {
+    commandSequenceRef.current += 1;
+    return `${action}-${Date.now().toString(36)}-${commandSequenceRef.current.toString(36)}`;
+  }, []);
 
   const rememberAuthorityMode = useCallback((mode: AuthorityMode) => {
     authorityModeRef.current = mode;
@@ -576,7 +664,7 @@ export function GameClient() {
     });
     socketRef.current = nextSocket;
     nextSocket.on("connect", () => {
-      rememberAuthorityMode("v2");
+      rememberAuthorityMode("v4");
       setConnected(true);
       setError("");
       const saved = readSession();
@@ -608,7 +696,7 @@ export function GameClient() {
       setError("The room authority is offline. Reconnection will continue automatically.");
     });
     nextSocket.on("room_state", (state: RoomState) =>
-      receiveRoomState(state, "sixfold-road-v3"),
+      receiveRoomState(state, "sixfold-road-v4"),
     );
     return () => {
       socketRef.current = null;
@@ -629,10 +717,20 @@ export function GameClient() {
 
   useEffect(() => {
     if (!room?.lastRoll || !sound) return;
+    if (Number(room.rulesVersion || 0) >= 4) return;
     const rollKey = `${room.turnNumber}-${room.lastRoll.seat}-${room.lastRoll.die}`;
     if (lastRollRef.current && lastRollRef.current !== rollKey) playTone("roll");
     lastRollRef.current = rollKey;
-  }, [room?.lastRoll, room?.turnNumber, sound]);
+  }, [room?.lastRoll, room?.rulesVersion, room?.turnNumber, sound]);
+
+  useEffect(() => {
+    if (!room?.turn?.naturalRoll || !sound) return;
+    const rollKey = `${room.turn.id}-${room.turn.naturalRoll}`;
+    if (naturalRollRef.current && naturalRollRef.current !== rollKey) {
+      playTone("roll");
+    }
+    naturalRollRef.current = rollKey;
+  }, [room?.turn?.id, room?.turn?.naturalRoll, sound]);
 
   useEffect(() => {
     if (!room || !sound || self?.seat === undefined) return;
@@ -649,9 +747,34 @@ export function GameClient() {
   useEffect(() => {
     if (!room || !sound) return;
     if (collapseRef.current && room.collapseCount > collapseRef.current) {
-      playTone("collapse");
+      playTone("fracture");
     }
     collapseRef.current = room.collapseCount;
+  }, [room, sound]);
+
+  useEffect(() => {
+    if (!room || !sound) return;
+    const event = room.events?.at(-1);
+    if (!event?.id) return;
+    if (!eventCueRef.current) {
+      eventCueRef.current = event.id;
+      return;
+    }
+    if (eventCueRef.current === event.id) return;
+    eventCueRef.current = event.id;
+    if (event.type === "oxygen" || event.type === "golden-thread") {
+      playTone("oxygen");
+    } else if (
+      ["key-found", "vow-complete", "qualification"].includes(event.type)
+    ) {
+      playTone("key");
+    } else if (event.type === "bend" && event.finalRoll !== event.naturalRoll) {
+      playTone("bend");
+    } else if (event.type === "winner") {
+      playTone("victory");
+    } else if (event.type === "house-victory") {
+      playTone("fracture");
+    }
   }, [room, sound]);
 
   function finishEntry(reply: ServerReply, entryName: string) {
@@ -736,12 +859,16 @@ export function GameClient() {
 
   function emitAction(event: string, payload: Record<string, unknown> = {}) {
     if (!session) return;
+    const commandPayload = {
+      ...payload,
+      commandId: payload.commandId || nextCommandId(event),
+    };
     setBusy(true);
     if (HTTP_AUTHORITY) {
       void requestAuthority(event, {
         code: session.code,
         token: session.token,
-        ...payload,
+        ...commandPayload,
       })
         .then((reply) => {
           setBusy(false);
@@ -764,7 +891,7 @@ export function GameClient() {
     if (!socket) return;
     socket.emit(
       event,
-      { code: session.code, token: session.token, ...payload },
+      { code: session.code, token: session.token, ...commandPayload },
       (reply: ServerReply) => {
         setBusy(false);
         if (!reply.ok) {
@@ -793,6 +920,7 @@ export function GameClient() {
     const payload = {
       code: session.code,
       token: session.token,
+      commandId: nextCommandId("reject_transmission"),
       ...failure,
     };
     if (HTTP_AUTHORITY) {
@@ -824,6 +952,18 @@ export function GameClient() {
   }
 
   function leaveTable() {
+    if (session && self) {
+      const payload = {
+        code: session.code,
+        token: session.token,
+        commandId: nextCommandId("leave_seat"),
+      };
+      if (HTTP_AUTHORITY) {
+        void requestAuthority("leave_seat", payload);
+      } else {
+        socketRef.current?.emit("leave_seat", payload, () => undefined);
+      }
+    }
     setRoom(null);
     setSession(null);
     saveSession(null);
@@ -832,8 +972,26 @@ export function GameClient() {
 
   async function copyCode() {
     if (!room) return;
-    await navigator.clipboard.writeText(room.code);
-    setError("Room code copied. The signal can be shared.");
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(room.code);
+      setError("Room code copied. The signal can be shared.");
+    } catch {
+      const fallback = document.createElement("textarea");
+      fallback.value = room.code;
+      fallback.setAttribute("readonly", "");
+      fallback.style.position = "fixed";
+      fallback.style.opacity = "0";
+      document.body.appendChild(fallback);
+      fallback.select();
+      const copied = document.execCommand("copy");
+      fallback.remove();
+      setError(
+        copied
+          ? "Room code copied. The signal can be shared."
+          : `Room code: ${room.code}`,
+      );
+    }
     window.setTimeout(() => setError(""), 1_500);
   }
 
@@ -864,18 +1022,33 @@ export function GameClient() {
 
   const signalPercent = (room.signal / room.signalMax) * 100;
   const signalDanger = room.signal >= 9;
+  const v4 = authorityMode === "v4" || Number(room.rulesVersion || 0) >= 4;
   const canRoll = Boolean(
     self &&
       room.status === "playing" &&
       room.currentSeat === self.seat &&
-      !room.pendingChoice &&
-      !room.pendingCouncil,
+      (v4
+        ? room.phase === "intent" && room.turn?.intent
+        : !room.pendingChoice && !room.pendingCouncil),
   );
+  const latestAnnouncement =
+    room.recentEvents?.at(-1)?.summary ||
+    room.recentEvents?.at(-1)?.title ||
+    room.lastEvent.summary ||
+    room.lastEvent.body ||
+    room.lastEvent.title;
 
   return (
     <main
-      className={`game-shell entity-v5 mode--${room.youtubeChannel?.brand || "obscur"}${authorityMode === "v1" ? " is-legacy-authority" : ""}${signalDanger ? " signal-danger" : ""}`}
+      className={`game-shell entity-v5 mode--${
+        room.youtubeChannel?.brand || "obscur"
+      }${authorityMode === "v1" ? " is-legacy-authority" : ""}${
+        signalDanger ? " signal-danger" : ""
+      }${broadcastMode ? " is-broadcast-mode" : ""}`}
     >
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {latestAnnouncement}
+      </div>
       <header className="game-header">
         <div className="game-brand">
           <div className="mini-emblem">6</div>
@@ -907,7 +1080,11 @@ export function GameClient() {
             <i style={{ width: `${signalPercent}%` }} />
             {Array.from({ length: 12 }, (_, index) => <span key={index} />)}
           </div>
-          <small>{signalDanger ? "COLLAPSE IMMINENT" : `${room.collapseCount} collapses survived`}</small>
+          <small>
+            {signalDanger
+              ? "FRACTURE IMMINENT"
+              : `${room.fractures ?? room.collapseCount}/3 Fractures · third gives the House victory`}
+          </small>
         </div>
 
         <nav className="header-actions" aria-label="Game options">
@@ -932,6 +1109,35 @@ export function GameClient() {
         </nav>
       </header>
 
+      {authorityMode === "v1" && (
+        <div className="legacy-authority-banner" role="status">
+          LIVE AUTHORITY V1 · Foxy-only compatibility · v4 source features are
+          not publicly deployed on this endpoint.
+        </div>
+      )}
+
+      {broadcastMode && (
+        <section className="broadcast-hud" aria-label="Broadcast match status">
+          <div>
+            <small>OBSCUR · LIVE TABLE</small>
+            <strong>
+              ROUND {room.round} ·{" "}
+              {String(room.phase || room.status).toUpperCase()}
+            </strong>
+          </div>
+          <span>
+            STATIC {room.signal}/{room.signalMax} · FRACTURES{" "}
+            {room.fractures || 0}/3
+          </span>
+          <span>OMEN {(room.omen || room.nextOmen || "NONE").toUpperCase()}</span>
+          <span>
+            {room.endgame?.mode === "normal"
+              ? `HARD END IN ${Math.max(0, 12 - room.round)} ROUNDS`
+              : String(room.endgame?.mode || "NORMAL").toUpperCase()}
+          </span>
+        </section>
+      )}
+
       <div className="game-layout">
         <SeatRail
           room={room}
@@ -945,7 +1151,7 @@ export function GameClient() {
           self={self}
           canRoll={canRoll}
           busy={busy}
-          onRoll={() => emitAction("roll")}
+          onRoll={() => emitAction(v4 ? "cast" : "roll")}
         />
         <CommandRail
           room={room}
@@ -956,11 +1162,25 @@ export function GameClient() {
           onChoice={(choiceId) => emitAction("answer_choice", { choiceId })}
           onCouncilVote={(choiceId) => emitAction("vote_council", { choiceId })}
           onGift={(targetSeat) => emitAction("gift_echo", { targetSeat })}
+          onIntent={(intent: Intent, targetSeat?: number) =>
+            emitAction("select_intent", { intent, targetSeat })
+          }
+          onPrediction={(prediction: SpaceClass) =>
+            emitAction("submit_prediction", { prediction })
+          }
+          onBend={(delta, useAshEvent) =>
+            emitAction("bend", { delta, useAshEvent })
+          }
+          onLegacyTune={(amount) => emitAction("tune_roll", { amount })}
+          onGiveOxygen={() => emitAction("give_oxygen")}
+          onMaskPower={(payload = {}) => emitAction("use_mask_power", payload)}
+          onStreamerMode={(enabled) =>
+            emitAction("set_streamer_mode", { enabled })
+          }
           onTransmissionFailure={
             authorityMode === "v1" ? undefined : rerouteTransmission
           }
           onStart={() => emitAction("start_game")}
-          onTune={(amount) => emitAction("tune_roll", { amount })}
           onUseRelic={(relicId) => emitAction("use_relic", { relicId })}
         />
       </div>
@@ -976,7 +1196,7 @@ export function GameClient() {
         <span>
           {authorityMode === "v1"
             ? "Authority protocol v1 · Foxy-only compatibility · server-owned outcomes"
-            : "Authority protocol v2 · reconnectable seats · private tokens · server-owned outcomes"}
+            : `Authority protocol v${room.rulesVersion || 4} · reconnectable seats · idempotent commands · server-owned outcomes`}
         </span>
         <span>
           {room.status === "playing"

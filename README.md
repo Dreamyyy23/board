@@ -1,13 +1,30 @@
 # Obscur — The Sixfold Road
 
-An isolated Foxyverse multiplayer board game. Six travelers wear asymmetric
-masks, cross a thirty-six-space ritual road, survive the rising Static, bargain
-at Councils, collect relics, and race to return to the Hearth with thirteen
-Echoes and an Alabaster Key.
+Obscur is a one-to-six traveler, server-authoritative Foxyverse board game.
+Wear one of six asymmetric masks, read six possible roads, declare an Intent,
+cast and Bend the bone, rescue other travelers, survive Shared Static, and
+qualify for the Final Orbit.
 
-This is a game rather than a lore page. The board is synchronized in real time,
-all meaningful state changes are decided by the server, and reconnect tokens
-restore a traveler to the same mask.
+This repository contains the complete rules-v4 game: browser table, native
+ritual-machine presentation, Socket.IO authority, D1-backed HTTP authority,
+bots, reconnects, spectators, broadcast mode, deterministic simulation, and
+the legacy v1 compatibility adapter.
+
+## What makes it a game
+
+- A 36-space physical road with six visible destination classes every turn.
+- Server-owned natural rolls and a visible ±1 Focus Bend decision.
+- `CLAIM`, `SHELTER`, and targeted `BIND` Intents.
+- Private Witness predictions for every non-active traveler.
+- Give Oxygen reactions and persistent Golden Thread relationships.
+- Oracle choices, secret Council votes, relics, Omens, and Fracture laws.
+- Six masks with distinct passives, charged powers, and behavioral Vows.
+- A public, deterministic Final Orbit and House-loss condition.
+- Authority-selected YouTube transmissions that never gate gameplay.
+- A median target of roughly 20–30 minutes.
+
+The full player rules are in [docs/RULES.md](docs/RULES.md). The 10,000-match
+acceptance result is in [docs/BALANCE-REPORT.md](docs/BALANCE-REPORT.md).
 
 ## Run locally
 
@@ -18,102 +35,116 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The Socket.IO room authority listens on port
-`3001`; `npm run dev` starts both processes.
+Open `http://localhost:3000`. The realtime authority listens on port `3001`.
+Create a table and use **Call Echo Traveler** to fill empty masks with bots for
+a complete solo match.
 
-For a solo test, create a room, call several Echo travelers, select a mask, and
-begin the crossing. For multiplayer testing, open another browser or private
-window and join with the five-letter room code.
-
-## GitHub Pages
-
-`npm run build:pages` creates the committed static Pages shell at `index.html`
-and its browser bundle in `pages-assets/`. GitHub Pages can publish that client
-from the repository root without converting this README into the website.
-
-GitHub Pages cannot execute multiplayer authority code itself. The published
-client therefore calls the durable HTTP authority at
-`https://obscur-sixfold-road.firstly2-8y.chatgpt.site/api/authority` while all
-player-facing navigation remains on `https://dreamyyy23.github.io/board/`.
-Rebuild the Pages client with:
+Useful commands:
 
 ```text
-VITE_GAME_SERVER_URL=https://obscur-sixfold-road.firstly2-8y.chatgpt.site/api/authority npm run build:pages
+npm run lint
+npm test
+npm run simulate:baseline -- --matches=10000 --players=6 --seed=20260725
+npm run simulate -- --matches=10000 --players=6 --seed=20260725 --profile=all
+npm run build:pages
 ```
 
-The production authority stores rooms in D1, accepts the GitHub Pages origin,
-and uses polling so the static client does not depend on a WebSocket-capable
-host.
+## Rules-v4 turn
 
-## The game
+Each ordinary turn follows one canonical authority sequence:
 
-- Six named masks have distinct passive abilities: Ember, Veil, Thorn, Moon,
-  Moss, and Ash.
-- Every traveler has Focus, Resolve, a personal Vow, inventory slots, and a
-  once-per-turn gift action.
-- Focus can tune a server-owned die exactly one face before rolling.
-- Relics create deliberate tactical exceptions: ward a collapse, reroll a bad
-  cast, or reveal the next space.
-- Oracle spaces pause for a private choice. Councils pause for a table-wide
-  vote and resolve only after every human traveler has answered.
-- The global Static meter rises with dangerous outcomes. At twelve, the table
-  collapses and every unwarded traveler loses Echoes.
-- Vow progress rewards a particular style of play rather than only raw luck.
-- A traveler wins by carrying an Alabaster Key, reaching thirteen Echoes, and
-  completing a full circuit.
-- A room is created with a YouTube channel URL. The authority resolves and
-  caches its public upload catalog once, then draws a random upload on every
-  landing without spending API quota per roll.
-- If YouTube rejects an RSS-discovered embed, the receiver reports only that
-  assigned ID and the authority advances to a distinct candidate. The private
-  catalog, movement, rewards, and landing outcome do not change.
-- Every player and spectator receives the same authority-issued transmission.
-  It enters as a full-table broadcast, then docks beside the board while the
-  next turn continues.
-- The player attempts playback immediately after a landing. If a browser blocks
-  autoplay, the receiver presents one adjacent `START SIGNAL` control. Native
-  pause, mute, captions, fullscreen, and YouTube controls remain available.
-- Playback never gates movement and watch duration never changes rewards,
-  progression, or victory.
-- The authority enforces six seats but deliberately does not enforce one seat
-  per person, account, or network. One operator may occupy all six through six
-  separate sessions.
+```text
+READ → INTENT → WITNESS → CAST → BEND → RESOLVE → REACTION → TRANSMISSION
+```
 
-## Multiplayer authority
+Expired human decisions settle to documented safe defaults. Bots use the same
+command paths. Commands carry idempotency IDs, and reconnect tokens restore the
+same mask without ever appearing in public snapshots.
+
+A traveler qualifies with 13 Echoes, an Alabaster Key, and one completed
+circuit. The current round then finishes and all occupied masks receive one
+Final Orbit turn. The third Fracture—or failure to qualify by the hard
+ending—gives the victory to the House.
+
+## Presentation
+
+The UI is a native board rather than a cinematic shell:
+
+- a physical six-pip die and natural/final result distinction;
+- reachable-space pulses and class-specific risk color;
+- smoothly traveling tokens with stable identities;
+- Golden Threads anchored between travelers;
+- phase, Bend, Oxygen, Fracture, key, and victory feedback;
+- Shared Static interference that escalates with authority state;
+- compact desktop, tablet, mobile, and `?broadcast=1` layouts;
+- text/symbol redundancy and a reduced-motion path.
+
+The visual rules and external-art approval gate are in
+[docs/VISUAL-BIBLE.md](docs/VISUAL-BIBLE.md). Planned Higgsfield batches are
+recorded in
+[docs/HIGGSFIELD-GENERATION-MANIFEST.json](docs/HIGGSFIELD-GENERATION-MANIFEST.json).
+External cinematic frames are optional; the complete game remains playable
+with every generated asset disabled.
+
+## Architecture
 
 ```text
 React / vinext client
-        │ Socket.IO commands + canonical snapshots
-        ▼
-Node room authority
-        ├── room-code registry and six reconnectable seats
-        ├── server-owned die, timer, events, votes, and inventory
-        ├── Oracle and Council pause states
-        ├── bot turns through the same command path
-        └── token-free public room snapshots
+        │
+        ├── Socket.IO commands + canonical snapshots (local realtime)
+        │
+        └── HTTP envelopes + polling (static Pages client)
+                    │
+                    ▼
+Rules-v4 authority
+        ├── server-owned phases, deadlines, die, events, and winners
+        ├── reconnectable seats, spectators, bots, and idempotent commands
+        ├── D1 optimistic persistence for HTTP rooms
+        ├── private YouTube catalog and public transmission identity
+        └── structured Chronicle and deterministic simulation
 ```
 
-Local Socket.IO rooms are kept in memory. The GitHub Pages release instead uses
-`server/http-authority.mjs`, stores room snapshots in D1, and applies optimistic
-version checks so simultaneous commands cannot silently overwrite each other.
-Reconnect tokens remain in each player's browser and are never included in
-public room snapshots.
+The current identifiers are:
+
+- Socket.IO: `sixfold-road-v4`
+- HTTP: `sixfold-road-http-v4`
+- `rulesVersion: 4`
+- `stateVersion: 4`
+
+See [docs/PROTOCOL.md](docs/PROTOCOL.md) for commands and state contracts, and
+[docs/PRODUCTION-ARCHITECTURE.md](docs/PRODUCTION-ARCHITECTURE.md) for the
+deployment model.
+
+## GitHub Pages and authority deployment
+
+`npm run build:pages` creates the static Pages shell at `index.html`, its
+browser bundle in `pages-assets/`, and a self-contained preview in
+`pages-dist/`.
+
+GitHub Pages cannot run multiplayer authority code. A production Pages build
+must embed an already-deployed HTTP authority:
+
+```powershell
+$env:VITE_GAME_SERVER_URL='https://your-authority.example/api/authority'
+npm run build:pages
+```
+
+The build config gives an explicit process environment variable priority over
+`.env.local`, preventing a release from accidentally targeting localhost.
+Until the rules-v4 authority and static bundle are both deployed, a public
+endpoint may continue to expose the legacy v1 compatibility experience; local
+source remains the release authority of record.
 
 ## Configuration
 
-- `GAME_PORT` — realtime server port, default `3001`
+- `GAME_PORT` — realtime port, default `3001`
 - `CLIENT_ORIGINS` — comma-separated allowed browser origins
-- `NEXT_PUBLIC_GAME_SERVER_URL` — browser-facing realtime endpoint
-- `VITE_GAME_SERVER_URL` — authority endpoint embedded in the GitHub Pages
-  client
-- `YOUTUBE_API_KEY` — optional server-only YouTube Data API v3 credential. It
-  enables complete handle resolution, larger upload catalogs, and filtering
-  for public embeddable videos. It must never be embedded in GitHub Pages.
+- `NEXT_PUBLIC_GAME_SERVER_URL` — vinext browser-facing endpoint
+- `VITE_GAME_SERVER_URL` — endpoint embedded in the Pages client
+- `YOUTUBE_API_KEY` — optional server-only YouTube Data API credential
 
-Board rules, mask abilities, vows, relics, event decks, and the curated channel
-video IDs live in
-`server/game-core.mjs`. The wire contract is documented in
-`docs/PROTOCOL.md`.
+Never embed `YOUTUBE_API_KEY`, reconnect tokens, or the room's private video
+catalog in the Pages bundle.
 
 ## Verification
 
@@ -122,6 +153,15 @@ npm run lint
 npm test
 ```
 
-The suite covers public-state privacy, turn authorization, Oracle ownership,
-timer authority, reconnects, asymmetric mask selection, Focus tuning, Council
-consensus, and relic consumption. `npm test` also creates a production build.
+The test suite covers rules-v4 phases, all six Vow completion paths, Omens,
+mask powers, Fractures, timeout defaults, bots, reconnects, spectators,
+idempotency, public-state privacy, HTTP persistence, video failover,
+compatibility normalization, adaptive presentation contracts, and production
+build creation.
+
+The deterministic baseline and acceptance artifacts are
+`docs/balance-baseline.json` and `docs/balance-v4.json`. The legacy authority
+completed only 0.51% of matches before the simulator's 720-action guard. Rules
+v4 completed all 10,000 matches with zero invalid or soft-lock states, a
+60-cast median, and all six masks inside the intended 13–20% conditional
+win-share band.

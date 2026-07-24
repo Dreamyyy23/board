@@ -189,13 +189,20 @@ export function TransmissionStage({
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [rerouting, setRerouting] = useState(false);
+  const [collapsedTransmission, setCollapsedTransmission] = useState<
+    string | null
+  >(null);
 
   const transmissionKey =
     event?.transmissionId || event?.id || event?.videoId || null;
+  const collapsed = Boolean(
+    transmissionKey && collapsedTransmission === transmissionKey,
+  );
   const brand = safeBrand(event?.channelBrand || event?.brand);
   const title =
     event?.videoTitle || event?.videoLabel || event?.title || "Unknown signal";
   const source = event?.videoSource || "Unknown channel";
+  const shouldMountPlayer = Boolean(event?.videoId);
 
   useEffect(() => {
     onPhaseChangeRef.current = onPhaseChange;
@@ -270,6 +277,7 @@ export function TransmissionStage({
   }, []);
 
   useEffect(() => {
+    if (!shouldMountPlayer) return;
     let disposed = false;
 
     void loadYouTubeApi()
@@ -340,17 +348,11 @@ export function TransmissionStage({
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [loadCurrentTransmission, requestAlternative]);
+  }, [loadCurrentTransmission, requestAlternative, shouldMountPlayer]);
 
   useEffect(() => {
-    const age = event?.transmissionStartedAt
-      ? Date.now() - event.transmissionStartedAt
-      : Number.POSITIVE_INFINITY;
     const hasTransmission = Boolean(
-      event?.transmissionId &&
-        event.videoId &&
-        age >= -10_000 &&
-        age < 120_000,
+      event?.transmissionId && event.videoId,
     );
     currentVideoRef.current = hasTransmission ? event?.videoId || null : null;
     currentTransmissionRef.current = hasTransmission
@@ -373,6 +375,10 @@ export function TransmissionStage({
     }, 0);
 
     if (hasTransmission) {
+      const stingerDuration =
+        event?.severity === "critical" || event?.severity === "major"
+          ? 2_500
+          : 1_200;
       takeoverTimerRef.current = window.setTimeout(() => {
         announcePhase("docked");
         window.requestAnimationFrame(() => {
@@ -385,7 +391,7 @@ export function TransmissionStage({
           });
         });
         takeoverTimerRef.current = null;
-      }, 4_200);
+      }, stingerDuration);
     }
 
     return () => {
@@ -399,6 +405,7 @@ export function TransmissionStage({
     announcePhase,
     event?.transmissionId,
     event?.transmissionStartedAt,
+    event?.severity,
     event?.videoId,
     loadCurrentTransmission,
     transmissionKey,
@@ -410,11 +417,12 @@ export function TransmissionStage({
         "transmission-stage",
         `transmission-stage--${phase}`,
         `transmission-stage--brand-${brand}`,
+        collapsed ? "is-collapsed" : "",
         className,
       ]
         .filter(Boolean)
         .join(" "),
-    [brand, className, phase],
+    [brand, className, collapsed, phase],
   );
 
   return (
@@ -457,9 +465,21 @@ export function TransmissionStage({
           <span className="transmission-stage__status-light" aria-hidden="true" />
           {playerStatus}
         </div>
+        <button
+          aria-expanded={!collapsed}
+          className="transmission-stage__collapse"
+          onClick={() =>
+            setCollapsedTransmission((value) =>
+              value === transmissionKey ? null : transmissionKey,
+            )
+          }
+          type="button"
+        >
+          {collapsed ? "OPEN" : "COLLAPSE"}
+        </button>
       </header>
 
-      <div className="transmission-stage__body">
+      <div className="transmission-stage__body" hidden={collapsed}>
         <div
           aria-label={`Video player for ${title}`}
           className="transmission-stage__player-frame"
@@ -526,7 +546,11 @@ export function TransmissionStage({
       </div>
 
       <footer className="transmission-stage__footer">
-        <span>Controls remain with the table</span>
+        <span>
+          {event?.omen
+            ? `${event.omen.toUpperCase()} OMEN · applies next ordinary turn`
+            : "Controls remain with the table"}
+        </span>
         <span aria-hidden="true">◆</span>
         <span>{brand.replace(/-/g, " ")}</span>
       </footer>

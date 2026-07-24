@@ -104,6 +104,25 @@ test("v2 snapshots pass through unchanged", () => {
   assert.equal(normalized.room, room);
 });
 
+test("v4 snapshots pass through unchanged by protocol or state version", () => {
+  const room = {
+    rulesVersion: 4,
+    stateVersion: 4,
+    phase: "intent",
+  };
+  const inferred = createAuthorityCompatibility().normalize(room);
+  const explicit = createAuthorityCompatibility().normalize(
+    room,
+    "sixfold-road-http-v4",
+  );
+
+  assert.equal(inferAuthorityMode(room), "v4");
+  assert.equal(inferred.mode, "v4");
+  assert.equal(explicit.mode, "v4");
+  assert.equal(inferred.room, room);
+  assert.equal(explicit.room, room);
+});
+
 test("v1 non-landing snapshots remain silent", () => {
   const state = legacyState({
     lastRoll: null,

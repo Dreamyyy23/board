@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "project": "Obscur — The Sixfold Road",
+  "workflow": "UNLIMITED_FIRST_CREDITS_FOR_APPROVED_FINALS",
+  "unlimitedWindowEnds": "2026-07-31",
+  "accountUiIsFinalAuthority": true,
+  "creditGenerationAuthorized": false,
+  "styleFrameApproval": "PENDING",
+  "continuity": {
+    "materials": [
+      "smoke-dark lacquered wood",
+      "blackened brass",
+      "bone ivory",
+      "oxidized teal glass",
+      "worn vellum"
+    ],
+    "camera": "Near top-down ritual-table view with restrained physical perspective",
+    "masks": "Six small heraldic porcelain or enamel sigils; never realistic faces",
+    "static": "Hairline red-white interference veins that visibly measure shared danger",
+    "goldenThreads": "Taut warm-gold filaments physically anchored between traveler tokens",
+    "typography": "Reserved clean title areas only; no generated body copy",
+    "prohibited": [
+      "generic sci-fi HUD",
+      "neon cyberpunk",
+      "casino imagery",
+      "tarot cards",
+      "gore",
+      "occult pentagrams",
+      "realistic faces or masks",
+      "tentacles",
+      "particle storm",
+      "heavy fog over the board",
+      "lens flare",
+      "illegible generated UI text"
+    ]
+  },
+  "assets": [
+    {
+      "id": "styleframe_ordinary_active_turn_v1",
+      "gameplayEvent": "ordinary_active_turn",
+      "purpose": "Approve the default table materials, readable active authority, six destination previews, and restrained lighting.",
+      "targetDimensions": "2048x1152",
+      "aspectRatio": "16:9",
+      "targetDuration": null,
+      "mode": "UNLIMITED_WEB",
+      "draftModel": "Seedream 5.0 Pro",
+      "modelCandidates": [
+        "Seedream 5.0 Pro",
+        "Nano Banana Pro",
+        "GPT Image 2"
+      ],
+      "websiteSettings": {
+        "unlimitedToggle": "ON_AND_SHOWING_ZERO_CREDITS",
+        "quality": "2K",
+        "batchSize": 6
+      },
+      "plannedDrafts": 6,
+      "plannedRefinements": 4,
+      "prompt": "Cinematic product-design style frame for OBSCUR: THE SIXFOLD ROAD, a premium physical ritual board game viewed near top-down in a 16:9 composition. A blackened-brass spiral road with exactly thirty-six sockets sits in smoke-dark lacquered wood. Six small heraldic porcelain mask tokens occupy the road. One traveler is unmistakably active through a restrained warm-gold pool of light and a lit sigil, while exactly six reachable destinations are legible as small physical edge markers numbered one through six with ivory, oxidized-cyan, and ember-red class accents. A bone-ivory die rests in the central mechanism. Shared Static appears as a few fine red-white interference veins spreading from the heart, clearly below crisis. Two tokens share one taut warm-gold filament anchored between them. Leave clean dark negative space for real interface typography. Museum-grade materials, tactile depth, quiet dread, readable gameplay first, restrained cinematic lighting, no prerecorded-video screen.",
+      "negativeConstraints": "No generic dashboard, no neon cyberpunk, no casino table, no tarot cards, no pentagram, no gore, no faces, no human hands, no floating holograms, no heavy fog, no particle storm, no lens flare, no fake paragraphs, no invented UI buttons, do not hide the road or destination markers.",
+      "inputReferences": [
+        "public/table-bg.webp",
+        "public/mask-sheet.webp",
+        "public/omen-sheet-v2.webp",
+        "public/og.png"
+      ],
+      "visualContinuityRequirements": [
+        "Board silhouette must remain identical across all three style frames",
+        "Mask-token scale and materials must remain identical",
+        "Golden Thread must remain a physical anchored filament",
+        "Static must remain thin and informational"
+      ],
+      "generatedOutputPaths": [],
+      "selectedCandidate": null,
+      "rejectionReasons": [],
+      "approved": false,
+      "finalAssetLocation": "public/style-frames/ordinary-active-turn.webp",
+      "creditFinalRequired": false
+    },
+    {
+      "id": "styleframe_static_fracture_v1",
+      "gameplayEvent": "static_fracture",
+      "purpose": "Approve the major danger language without obscuring the board or playable state.",
+      "targetDimensions": "2048x1152",
+      "aspectRatio": "16:9",
+      "targetDuration": null,
+      "mode": "UNLIMITED_WEB",
+      "draftModel": "Seedream 5.0 Pro",
+      "modelCandidates": [
+        "Seedream 5.0 Pro",
+        "Kling O1 Image",
+        "GPT Image 2"
+      ],
+      "websiteSettings": {
+        "unlimitedToggle": "ON_AND_SHOWING_ZERO_CREDITS",
+        "quality": "2K",
+        "batchSize": 6
+      },
+      "plannedDrafts": 6,
+      "plannedRefinements": 4,
+      "prompt": "Static Fracture style frame for the exact same OBSCUR: THE SIXFOLD ROAD physical ritual table and camera. Preserve the complete thirty-six-socket blackened-brass road, central bone mechanism, and all six heraldic porcelain mask tokens. The shared danger has just crossed its threshold: thin red-white radio-interference fissures propagate from the central heart through the brass road, one outer ring is physically displaced by a few millimeters, and a single new rule plaque has risen mechanically from the table. Use a two-to-three-second major-event visual language frozen at its clearest instant. Ember red and dead white dominate only the fracture paths; controls, token positions, and road remain readable. Severe but restrained, tactile material stress, no explosion, no monster, no cinematic crop, clear cause and affected table.",
+      "negativeConstraints": "No destroyed board, no fireball, no lightning storm, no tentacles, no monster, no gore, no realistic face, no pentagram, no heavy smoke, no particle blanket, no screen glitch covering information, no neon HUD, no fake rules text, do not hide tokens or reachable road.",
+      "inputReferences": [
+        "public/table-bg.webp",
+        "public/mask-sheet.webp",
+        "public/omen-sheet-v2.webp",
+        "public/og.png"
+      ],
+      "visualContinuityRequirements": [
+        "Use the same board silhouette, camera, token scale, and materials as ordinary_active_turn",
+        "Fracture is expressed by material displacement and interference veins, not destruction",
+        "All six tokens and the Shared Static origin remain readable"
+      ],
+      "generatedOutputPaths": [],
+      "selectedCandidate": null,
+      "rejectionReasons": [],
+      "approved": false,
+      "finalAssetLocation": "public/style-frames/static-fracture.webp",
+      "creditFinalRequired": false
+    },
+    {
+      "id": "styleframe_final_orbit_v1",
+      "gameplayEvent": "final_orbit",
+      "purpose": "Approve the endgame camera, qualification light, and final-choice gravity.",
+      "targetDimensions": "2048x1152",
+      "aspectRatio": "16:9",
+      "targetDuration": null,
+      "mode": "UNLIMITED_WEB",
+      "draftModel": "Seedream 5.0 Pro",
+      "modelCandidates": [
+        "Seedream 5.0 Pro",
+        "Nano Banana Pro",
+        "GPT Image 2"
+      ],
+      "websiteSettings": {
+        "unlimitedToggle": "ON_AND_SHOWING_ZERO_CREDITS",
+        "quality": "2K",
+        "batchSize": 6
+      },
+      "plannedDrafts": 6,
+      "plannedRefinements": 4,
+      "prompt": "Final Orbit style frame for the exact same OBSCUR: THE SIXFOLD ROAD physical ritual table and camera, 16:9 near top-down. Keep the entire blackened-brass thirty-six-socket road and six heraldic porcelain mask tokens visible. One qualified traveler is marked by a pale-gold orbit line and a small Alabaster Key beside their token; every occupied mask receives one last turn. Several taut Golden Threads form a sparse readable constellation between tokens. The road's outer brass ring lifts subtly and aligns toward the Hearth, while cool cyan threshold light and pale ivory-gold endgame light replace the ordinary warmth. Shared Static remains visible at the perimeter as thin restrained red-white veins. The mood is inevitable, lucid, and watchable rather than triumphant spectacle. Reserve clean dark areas for real Final Orbit, timer, and ranking typography.",
+      "negativeConstraints": "No trophy podium, no victory confetti, no angelic character, no faces, no cosmic galaxy replacing the board, no literal planet orbit, no neon sci-fi HUD, no particle storm, no heavy bloom, no fake paragraphs, do not crop tokens, Hearth, Static, or the road.",
+      "inputReferences": [
+        "public/table-bg.webp",
+        "public/mask-sheet.webp",
+        "public/omen-sheet-v2.webp",
+        "public/og.png"
+      ],
+      "visualContinuityRequirements": [
+        "Use the same board silhouette, camera, token scale, and materials as the other two frames",
+        "Qualification is pale gold and Alabaster ivory",
+        "Golden Threads remain sparse, taut, anchored, and readable",
+        "Static remains present so endgame risk is not visually erased"
+      ],
+      "generatedOutputPaths": [],
+      "selectedCandidate": null,
+      "rejectionReasons": [],
+      "approved": false,
+      "finalAssetLocation": "public/style-frames/final-orbit.webp",
+      "creditFinalRequired": false
+    }
+  ]
+}

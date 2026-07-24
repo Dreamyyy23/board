@@ -66,47 +66,106 @@ test(
     const started = await emit(first, "start_game", {
       code: created.code,
       token: created.token,
+      commandId: "start-1",
     });
     assert.equal(started.ok, true);
-    await startedState;
+    const opening = await startedState;
+    assert.equal(opening.phase, "intent");
+    assert.equal(opening.rulesVersion, 4);
 
-    const rejected = await emit(second, "roll", {
+    const rejected = await emit(second, "cast", {
       code: created.code,
       token: joined.token,
+      commandId: "out-of-turn-cast",
     });
     assert.equal(rejected.ok, false);
 
-    const movedState = waitForState(
+    const intentState = waitForState(
       second,
-      (state) => state.currentSeat === 1 && state.lastRoll?.seat === 0,
+      (state) =>
+        state.currentSeat === 0 &&
+        state.phase === "intent" &&
+        state.turn?.intent === "shelter",
     );
-    const rolled = await emit(first, "roll", {
+    const intent = await emit(first, "select_intent", {
       code: created.code,
       token: created.token,
+      commandId: "intent-1",
+      intent: "shelter",
     });
-    assert.equal(rolled.ok, true);
-    const afterRoll = await movedState;
-    assert.equal(afterRoll.currentSeat, 1);
+    assert.equal(intent.ok, true);
+    await intentState;
+
+    const castState = waitForState(
+      second,
+      (state) =>
+        state.currentSeat === 0 &&
+        state.phase === "bend" &&
+        Number.isInteger(state.turn?.naturalRoll),
+    );
+    const cast = await emit(first, "cast", {
+      code: created.code,
+      token: created.token,
+      commandId: "cast-1",
+    });
+    assert.equal(cast.ok, true);
+    const afterCast = await castState;
+    assert.equal(afterCast.turn.finalRoll, afterCast.turn.naturalRoll);
+
+    const landingState = waitForState(
+      second,
+      (state) => state.activeTransmission?.landingSeat === 0,
+    );
+    const bent = await emit(first, "bend", {
+      code: created.code,
+      token: created.token,
+      commandId: "bend-1",
+      delta: 0,
+    });
+    assert.equal(bent.ok, true);
+    let afterLanding = await landingState;
+
+    if (afterLanding.phase === "reaction") {
+      const resolvedState = waitForState(
+        second,
+        (state) =>
+          state.currentSeat === 1 &&
+          state.activeTransmission?.landingSeat === 0,
+      );
+      const rescued = await emit(second, "give_oxygen", {
+        code: created.code,
+        token: joined.token,
+        commandId: "oxygen-1",
+      });
+      assert.equal(rescued.ok, true);
+      afterLanding = await resolvedState;
+    }
+    assert.equal(afterLanding.currentSeat, 1);
 
     const reroutedState = waitForState(
       second,
       (state) =>
         state.activeTransmission?.videoId !==
-        afterRoll.activeTransmission.videoId,
+        afterLanding.activeTransmission.videoId,
     );
     const rerouted = await emit(second, "reject_transmission", {
       code: created.code,
-      transmissionId: afterRoll.activeTransmission.transmissionId,
-      videoId: afterRoll.activeTransmission.videoId,
+      token: joined.token,
+      commandId: "reroute-1",
+      transmissionId: afterLanding.activeTransmission.transmissionId,
+      videoId: afterLanding.activeTransmission.videoId,
     });
     assert.equal(rerouted.ok, true);
     const afterReroute = await reroutedState;
     assert.notEqual(
       afterReroute.activeTransmission.videoId,
-      afterRoll.activeTransmission.videoId,
+      afterLanding.activeTransmission.videoId,
     );
-    assert.deepEqual(afterReroute.lastRoll, afterRoll.lastRoll);
-    assert.equal(afterReroute.turnNumber, afterRoll.turnNumber);
+    assert.equal(
+      afterReroute.players[0].position,
+      afterLanding.players[0].position,
+    );
+    assert.equal(afterReroute.turnNumber, afterLanding.turnNumber);
 
     second.disconnect();
     const returning = io(url, { transports: ["websocket"] });

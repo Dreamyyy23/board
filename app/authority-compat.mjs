@@ -11,6 +11,7 @@ export const LEGACY_FOXY_CHANNEL = Object.freeze({
 export function authorityModeFromProtocol(protocol) {
   const value = String(protocol || "").toLowerCase();
   if (value.includes("v1")) return "v1";
+  if (value.includes("v4")) return "v4";
   if (value.includes("v2") || value.includes("v3")) return "v2";
   return null;
 }
@@ -18,6 +19,9 @@ export function authorityModeFromProtocol(protocol) {
 export function inferAuthorityMode(room, protocol) {
   const explicit = authorityModeFromProtocol(protocol);
   if (explicit) return explicit;
+  if (Number(room?.rulesVersion) >= 4 || Number(room?.stateVersion) >= 4) {
+    return "v4";
+  }
   if (
     room &&
     (!Object.hasOwn(room, "youtubeChannel") ||

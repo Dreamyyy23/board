@@ -63,7 +63,13 @@ export function SeatRail({
               {player ? (
                 <>
                   <span className="seat-turn-label">
-                    {room.currentSeat === index ? "Casting now" : player.echoes === leaderScore && leaderScore > 0 ? "Leading" : "On the road"}
+                    {player.qualified
+                      ? "QUALIFIED"
+                      : room.currentSeat === index
+                        ? `${(room.phase || "casting").replace("-", " ")} now`
+                        : player.echoes === leaderScore && leaderScore > 0
+                          ? "Leading"
+                          : "On the road"}
                   </span>
                   <div className="seat-score">
                     <span><b>{player.echoes}</b> echoes</span>
@@ -80,6 +86,21 @@ export function SeatRail({
                   <div className="seat-resources">
                     <label>Focus <ResourcePips value={player.focus} max={3} kind="focus" /></label>
                     <label>Resolve <ResourcePips value={player.resolve} max={3} kind="resolve" /></label>
+                  </div>
+                  <div className="seat-v4-flags">
+                    <span className={player.maskCharge ? "is-ready" : ""}>
+                      {player.maskCharge ? "ACTIVE CHARGED" : "ACTIVE SPENT"}
+                    </span>
+                    <span>{player.goldenThreads || 0} THREADS</span>
+                    {player.exposed && <strong>EXPOSED</strong>}
+                    {player.predictionSubmitted && (
+                      <em>
+                        WITNESS{" "}
+                        {typeof player.predictionSubmitted === "string"
+                          ? player.predictionSubmitted
+                          : "PLACED"}
+                      </em>
+                    )}
                   </div>
                   <div className="vow-mini">
                     <span>{player.vow.complete ? "Vow fulfilled" : player.vow.title}</span>
@@ -113,6 +134,11 @@ export function SeatRail({
               <div className="seat-flags">
                 <i className={player.online ? "online" : "offline"} />
                 {player.warded && <span className="ward-flag" title="Warded">◇</span>}
+                {player.qualified && (
+                  <span className="qualified-flag" title="Qualified">
+                    Q
+                  </span>
+                )}
                 {player.bot && <span className="echo-flag">ECHO</span>}
               </div>
             )}

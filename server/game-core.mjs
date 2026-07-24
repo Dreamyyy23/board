@@ -1,10 +1,41 @@
+// Versioned authoritative rules for Obscur — The Sixfold Road.
 import crypto from "node:crypto";
 
 export const MAX_PLAYERS = 6;
 export const BOARD_SIZE = 36;
 export const TURN_MS = 20_000;
+export const BEND_MS = 5_000;
+export const REACTION_MS = 5_000;
+export const COUNCIL_REVEAL_MS = 650;
+export const FRACTURE_MS = 2_500;
 export const WIN_ECHOES = 13;
 export const SIGNAL_MAX = 12;
+export const RULES_VERSION = 4;
+export const HARD_END_ROUND = 12;
+export const FINAL_ROUND = HARD_END_ROUND + 1;
+
+export const INTENTS = Object.freeze(["claim", "shelter", "bind"]);
+export const PREDICTIONS = Object.freeze(["light", "threshold", "teeth"]);
+export const OMENS = Object.freeze([
+  "flame",
+  "mirror",
+  "door",
+  "moth",
+  "thread",
+  "static",
+]);
+
+export const PHASES = Object.freeze({
+  LOBBY: "lobby",
+  INTENT: "intent",
+  BEND: "bend",
+  REACTION: "reaction",
+  ORACLE: "oracle",
+  COUNCIL_VOTE: "council-vote",
+  COUNCIL_REVEAL: "council-reveal",
+  FRACTURE: "fracture",
+  FINISHED: "finished",
+});
 
 export const FOXY_ALCHEMY_VIDEOS = [
   "_agqpz2GSOc",
@@ -97,52 +128,160 @@ export const MASKS = [
     name: "EMBER",
     color: "#e76f51",
     title: "The First Spark",
-    passive: "Echo spaces grant one additional Echo.",
+    passive: "The first Echo space of each circuit grants one additional Echo.",
+    active: {
+      id: "carry-the-flame",
+      title: "Carry the Flame",
+      timing: "bend",
+      description:
+        "Move two extra spaces and add two Static; crossing Hearth kindles two Echoes.",
+    },
   },
   {
     id: "veil",
     name: "VEIL",
     color: "#7dd3fc",
     title: "The Uncut Thread",
-    passive: "The first Snare of each circuit is ignored.",
+    passive: "The first Snare of each circuit is ignored and grants four Echoes.",
+    active: {
+      id: "cut-the-thread",
+      title: "Cut the Thread",
+      timing: "reaction",
+      description:
+        "Cancel one harmful consequence and turn one prevented point into Static.",
+    },
   },
   {
     id: "thorn",
     name: "THORN",
     color: "#d8b4fe",
     title: "The Crooked Road",
-    passive: "Rifts carry you one additional space.",
+    passive: "Rifts carry you one additional space and grant four Echoes.",
+    active: {
+      id: "crooked-road",
+      title: "Crooked Road",
+      timing: "bend",
+      description:
+        "Choose an adjacent destination without Focus; entering Teeth earns one Echo.",
+    },
   },
   {
     id: "moon",
     name: "MOON",
     color: "#facc15",
     title: "The Listening House",
-    passive: "Archives restore one Focus.",
+    passive: "Archives restore one Focus and three Echoes.",
+    active: {
+      id: "hear-what-comes-next",
+      title: "Hear What Comes Next",
+      timing: "intent",
+      description: "Reveal exact events under two reachable destinations.",
+    },
   },
   {
     id: "moss",
     name: "MOSS",
     color: "#86efac",
     title: "The Patient Root",
-    passive: "The Hearth restores one Resolve.",
+    passive: "The Hearth restores one Resolve and tends four Echoes.",
+    active: {
+      id: "keep-the-ember",
+      title: "Keep the Ember",
+      timing: "reaction",
+      description:
+        "Pay for a rescue, prevent one extra point, and form a Golden Thread.",
+    },
   },
   {
     id: "ash",
     name: "ASH",
     color: "#fda4af",
     title: "The Last Witness",
-    passive: "Your landings lower global Static by one.",
+    passive:
+      "Your landings lower global Static by one; at HUNGRY or worse, keep one Echo.",
+    active: {
+      id: "last-witness",
+      title: "Last Witness",
+      timing: "intent",
+      description:
+        "Carry the previous ordinary event into this cast as a visible alternative.",
+    },
   },
 ];
 
+export const VOWS_V4 = [
+  {
+    id: "walk-rifts",
+    title: "Walk the Bent Road",
+    kind: "chosen-teeth",
+    target: 3,
+    description: "Willingly enter TEETH with CLAIM or Carry the Flame three times.",
+  },
+  {
+    id: "survive-snares",
+    title: "Remain Uncaught",
+    kind: "prevent-harm",
+    target: 3,
+    description: "Prevent or reduce three harmful consequences.",
+  },
+  {
+    id: "answer-oracles",
+    title: "Answer the Two Mouths",
+    kind: "bent-threshold",
+    target: 2,
+    description: "Deliberately Bend or Crooked Road into two THRESHOLD spaces.",
+  },
+  {
+    id: "open-archives",
+    title: "Hear the Lost Signal",
+    kind: "informed-change",
+    target: 3,
+    description: "Use revealed event information to alter three decisions.",
+  },
+  {
+    id: "gather-echoes",
+    title: "Tend the Small Lights",
+    kind: "distinct-rescues",
+    target: 2,
+    description: "Take part in rescues for two different travelers.",
+  },
+  {
+    id: "carry-relics",
+    title: "Keep What Was Left",
+    kind: "witnessed-turn",
+    target: 2,
+    description: "Use Last Witness twice without increasing Static.",
+  },
+];
+
+// Retained for deterministic baseline reproduction and old snapshot migration.
 export const VOWS = [
   { id: "walk-rifts", title: "Walk the Bent Road", kind: "rift", target: 3 },
   { id: "survive-snares", title: "Remain Uncaught", kind: "snare", target: 3 },
-  { id: "answer-oracles", title: "Answer the Two Mouths", kind: "oracle", target: 2 },
-  { id: "open-archives", title: "Hear the Lost Signal", kind: "archive", target: 2 },
-  { id: "gather-echoes", title: "Tend the Small Lights", kind: "echo", target: 5 },
-  { id: "carry-relics", title: "Keep What Was Left", kind: "relic", target: 2 },
+  {
+    id: "answer-oracles",
+    title: "Answer the Two Mouths",
+    kind: "oracle",
+    target: 2,
+  },
+  {
+    id: "open-archives",
+    title: "Hear the Lost Signal",
+    kind: "archive",
+    target: 2,
+  },
+  {
+    id: "gather-echoes",
+    title: "Tend the Small Lights",
+    kind: "echo",
+    target: 5,
+  },
+  {
+    id: "carry-relics",
+    title: "Keep What Was Left",
+    kind: "relic",
+    target: 2,
+  },
 ];
 
 export const RELICS = {
@@ -150,19 +289,19 @@ export const RELICS = {
     id: "quiet-bell",
     title: "Quiet Bell",
     mark: "◌",
-    description: "Reduce Static by four and restore one Resolve.",
+    description: "Reduce Static by four or silence the current table modifier.",
   },
   "mirror-shard": {
     id: "mirror-shard",
     title: "Mirror Shard",
     mark: "◇",
-    description: "Ward the next loss or backward movement.",
+    description: "Prevent up to two harm during a visible reaction.",
   },
   "foxfire-lens": {
     id: "foxfire-lens",
     title: "Foxfire Lens",
     mark: "◉",
-    description: "Restore two Focus.",
+    description: "Reveal exact events under two reachable destinations.",
   },
 };
 
@@ -178,7 +317,7 @@ export const SPACE_KINDS = Array.from({ length: BOARD_SIZE }, (_, index) => {
   return "echo";
 });
 
-const EVENTS = {
+export const EVENTS = {
   hearth: [
     {
       id: "hearth-return",
@@ -419,6 +558,33 @@ const EVENTS = {
   ],
 };
 
+export const COUNCIL_EVENT_V4 = {
+  id: "sixfold-council",
+  title: "The Sixfold Council",
+  body: "Every occupied mask must choose how the table answers the rising signal.",
+  tone: "council",
+  choices: [
+    {
+      id: "watch",
+      label: "Watch the Embers",
+      result:
+        "Lower Static by three; LIGHT rewards lose one Echo for the rest of this round.",
+    },
+    {
+      id: "open",
+      label: "Open the Mouth",
+      result:
+        "LIGHT grants one extra Echo; TEETH adds one extra Static this round.",
+    },
+    {
+      id: "knot",
+      label: "Knot the Thread",
+      result:
+        "The two lowest-Echo travelers gain one Echo; CLAIM adds one extra Static this round.",
+    },
+  ],
+};
+
 const COUNCIL_EVENT = {
   id: "sixfold-council",
   title: "The Sixfold Council",
@@ -438,7 +604,8 @@ const COUNCIL_EVENT = {
     {
       id: "exchange",
       label: "Exchange",
-      result: "The richest traveler gives two Echoes to the poorest. All recover one Focus.",
+      result:
+        "The richest traveler gives two Echoes to the poorest. All recover one Focus.",
     },
   ],
 };
