@@ -27,7 +27,7 @@ import type {
 } from "./game-types";
 
 const SERVER_URL =
-  process.env.NEXT_PUBLIC_GAME_SERVER_URL || "http://localhost:3001";
+  process.env.NEXT_PUBLIC_GAME_SERVER_URL || "/api/authority";
 const HTTP_AUTHORITY = SERVER_URL.endsWith("/api/authority");
 const SESSION_KEY = "obscur-sixfold-session";
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/@FoxyAlchemyStudio";
