@@ -130,10 +130,11 @@ npm run build:pages
 ```
 
 The build config gives an explicit process environment variable priority over
-`.env.local`, preventing a release from accidentally targeting localhost.
-Until the rules-v4 authority and static bundle are both deployed, a public
-endpoint may continue to expose the legacy v1 compatibility experience; local
-source remains the release authority of record.
+`.env.local`, preventing a release from accidentally targeting localhost. The
+checked-in Pages release targets the public rules-v4 authority at
+`https://obscur-sixfold-road-v4.h-ar-d5-33-5-3.chatgpt.site/api/authority`.
+Legacy responses still enter the labeled compatibility adapter rather than
+silently pretending to support v4 phases.
 
 ## Configuration
 

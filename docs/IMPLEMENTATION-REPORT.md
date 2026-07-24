@@ -1,8 +1,8 @@
 # Obscur rules v4 implementation report
 
 Date: 2026-07-25
-Status: implementation and acceptance complete; GitHub Pages client published;
-rules-v4 authority deployment remains blocked by external project state.
+Status: implementation, acceptance, rules-v4 authority, and GitHub Pages
+publication complete.
 
 ## Core design changes
 
@@ -95,19 +95,21 @@ Rules-v4 conditional win share remained within 13–20% for every mask: Ember
 ## Deployment status
 
 - **GitHub Pages:** implementation commit
-  `6753e74e1ec81816b60d08f012ec33c314d0f091` is published at
-  `https://dreamyyy23.github.io/board/`. The public HTML, v4 JavaScript bundle,
-  stylesheet, and required artwork all return HTTP 200. The configured
-  authority still reports `sixfold-road-http-v1`, so the public client uses its
-  explicit Foxy-only compatibility mode rather than claiming v4 authority.
+  `3e195f7f983ac2914284d738ac63478d0b8c6b48` is published at
+  `https://dreamyyy23.github.io/board/`. The public HTML, Ruleset IV JavaScript
+  bundle, stylesheet, and required artwork all return HTTP 200. The client is
+  bound to the verified rules-v4 authority and displays its live ruleset state
+  on entry.
 
-- **OpenAI Sites:** `.openai/hosting.json` names project
-  `appgprj_6a6335b811948191b68de9108c3f11ee`, but the Sites connector returns
-  `Sites project not found`. A version cannot be saved or deployed against a
-  nonexistent project.
+- **OpenAI Sites:** version 2 is publicly deployed at
+  `https://obscur-sixfold-road-v4.h-ar-d5-33-5-3.chatgpt.site`. Its
+  `/api/authority` endpoint reports `sixfold-road-http-v4` and `rulesVersion:
+  4`; a production smoke test created a room, filled all six seats with one
+  human plus five bots, and started in the 20-second `intent` phase. Recent
+  production Worker logs contained no errors.
 - **Source identity:** the original attachment export has no `.git` directory,
-  branch, or commit SHA. Publication must therefore be based on a clean clone of
-  `Dreamyyy23/board` and a normal fast-forward or reviewed merge.
+  branch, or commit SHA. Publication was therefore performed from a clean clone
+  of `Dreamyyy23/board` through normal fast-forward pushes.
 - **Higgsfield style frames:** the website session was signed out and displayed
   a normal credit charge rather than a verified Unlimited `$0` toggle. The
   required three-frame prompts are ready in the manifest; no generation and no
@@ -123,9 +125,9 @@ artifacts rather than optimize only overall wins.
 
 ### Networking
 
-Realtime and HTTP paths are tested locally, but multi-region D1 contention,
-long-lived production polling, and reconnects across a real deployment still
-require production soak testing.
+Realtime and HTTP paths are tested locally and the HTTP path is live on D1.
+Multi-region contention, long-lived production polling, and reconnects across
+extended public matches still require production soak testing.
 
 ### UI
 
