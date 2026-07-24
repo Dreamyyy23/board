@@ -1,0 +1,9 @@
+:root {
+  --font-display: "Cinzel";
+  --font-ui: "Alegreya Sans";
+  --font-mono: "Geist Mono";
+}
+
+html {
+  color-scheme: dark;
+}

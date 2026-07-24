@@ -25,6 +25,23 @@ For a solo test, create a room, call several Echo travelers, select a mask, and
 begin the crossing. For multiplayer testing, open another browser or private
 window and join with the five-letter room code.
 
+## GitHub Pages
+
+`npm run build:pages` creates the committed static Pages shell at `index.html`
+and its browser bundle in `pages-assets/`. GitHub Pages can publish that client
+from the repository root without converting this README into the website.
+
+GitHub Pages cannot execute the Node/Socket.IO room authority. For a live public
+multiplayer deployment, host `server/server.mjs` on a persistent Node service
+and build the Pages client with:
+
+```text
+VITE_GAME_SERVER_URL=https://your-realtime-host.example npm run build:pages
+```
+
+The authority must include `https://dreamyyy23.github.io` in
+`CLIENT_ORIGINS`.
+
 ## The game
 
 - Six named masks have distinct passive abilities: Ember, Veil, Thorn, Moon,

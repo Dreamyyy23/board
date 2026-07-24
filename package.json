@@ -10,6 +10,7 @@
     "dev:web": "vinext dev",
     "dev:server": "node --watch server/server.mjs",
     "build": "vinext build",
+    "build:pages": "vite build --config vite.pages.config.ts && node scripts/publish-pages.mjs",
     "start": "vinext start",
     "start:server": "node server/server.mjs",
     "test": "node --test tests/*.test.mjs && npm run build",
