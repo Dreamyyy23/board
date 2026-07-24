@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
     process.env.NEXT_PUBLIC_GAME_SERVER_URL ||
     env.VITE_GAME_SERVER_URL ||
     env.NEXT_PUBLIC_GAME_SERVER_URL ||
-    "http://localhost:3001";
+    "https://obscur-sixfold-road-v4.h-ar-d5-33-5-3.chatgpt.site/api/authority";
 
   return {
     root: "github-pages",
