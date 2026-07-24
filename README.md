@@ -31,16 +31,19 @@ window and join with the five-letter room code.
 and its browser bundle in `pages-assets/`. GitHub Pages can publish that client
 from the repository root without converting this README into the website.
 
-GitHub Pages cannot execute the Node/Socket.IO room authority. For a live public
-multiplayer deployment, host `server/server.mjs` on a persistent Node service
-and build the Pages client with:
+GitHub Pages cannot execute multiplayer authority code itself. The published
+client therefore calls the durable HTTP authority at
+`https://obscur-sixfold-road.firstly2-8y.chatgpt.site/api/authority` while all
+player-facing navigation remains on `https://dreamyyy23.github.io/board/`.
+Rebuild the Pages client with:
 
 ```text
-VITE_GAME_SERVER_URL=https://your-realtime-host.example npm run build:pages
+VITE_GAME_SERVER_URL=https://obscur-sixfold-road.firstly2-8y.chatgpt.site/api/authority npm run build:pages
 ```
 
-The authority must include `https://dreamyyy23.github.io` in
-`CLIENT_ORIGINS`.
+The production authority stores rooms in D1, accepts the GitHub Pages origin,
+and uses polling so the static client does not depend on a WebSocket-capable
+host.
 
 ## The game
 
@@ -81,18 +84,19 @@ Node room authority
         └── token-free public room snapshots
 ```
 
-Live rooms are currently kept in memory, so a server restart clears them. A
-production release should move each room to a durable single-writer authority
-such as Cloudflare Durable Objects, or use a Socket.IO fleet with a Redis
-adapter. A rotating host directory should distribute health, capacity, region,
-and protocol version only; reconnect tokens must never leave their room
-authority.
+Local Socket.IO rooms are kept in memory. The GitHub Pages release instead uses
+`server/http-authority.mjs`, stores room snapshots in D1, and applies optimistic
+version checks so simultaneous commands cannot silently overwrite each other.
+Reconnect tokens remain in each player's browser and are never included in
+public room snapshots.
 
 ## Configuration
 
 - `GAME_PORT` — realtime server port, default `3001`
 - `CLIENT_ORIGINS` — comma-separated allowed browser origins
 - `NEXT_PUBLIC_GAME_SERVER_URL` — browser-facing realtime endpoint
+- `VITE_GAME_SERVER_URL` — authority endpoint embedded in the GitHub Pages
+  client
 
 Board rules, mask abilities, vows, relics, event decks, and the curated channel
 video IDs live in
