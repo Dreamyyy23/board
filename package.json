@@ -9,7 +9,7 @@
     "dev": "concurrently -k -n TABLE,REALTIME -c cyan,magenta \"npm:dev:web\" \"npm:dev:server\"",
     "dev:web": "vinext dev",
     "dev:server": "node --watch server/server.mjs",
-    "build": "vinext build",
+    "build": "vinext build && node scripts/prune-sites-build.mjs",
     "build:pages": "vite build --config vite.pages.config.ts && node scripts/publish-pages.mjs",
     "start": "vinext start",
     "start:server": "node server/server.mjs",
