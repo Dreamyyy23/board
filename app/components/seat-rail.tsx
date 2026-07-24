@@ -51,7 +51,13 @@ export function SeatRail({
         {room.players.map((player, index) => (
           <article
             className={`seat-card${room.currentSeat === index ? " is-turn" : ""}${player?.id === self?.id ? " is-self" : ""}${!player ? " is-empty" : ""}${player && player.echoes === leaderScore && leaderScore > 0 ? " is-leader" : ""}`}
+            data-seat={index}
             key={index}
+            style={
+              {
+                "--seat-accent": player?.color || room.masks[index]?.color,
+              } as React.CSSProperties
+            }
           >
             <MaskPortrait seat={index} />
             <div className="seat-copy">

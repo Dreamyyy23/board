@@ -241,6 +241,35 @@ function EntryScreen({
         </ol>
       </section>
 
+      <section
+        className="entry-ritual-preview"
+        aria-label="Six masks surrounding the twenty-second authority clock"
+      >
+        <div className="entry-orbit">
+          <div className="entry-orbit-runes" aria-hidden="true">
+            {Array.from({ length: 12 }, (_, index) => <i key={index} />)}
+          </div>
+          {MASK_PREVIEWS.map(([mask], index) => (
+            <article key={mask}>
+              <MaskPortrait seat={index} small />
+              <span>{mask}</span>
+            </article>
+          ))}
+          <div className="entry-orbit-heart">
+            <small>AUTHORITY</small>
+            <b>20</b>
+            <span>SECONDS</span>
+          </div>
+        </div>
+        <p>
+          <span>1 ESCAPES</span>
+          <i aria-hidden="true" />
+          <span>6 DECIDE</span>
+          <i aria-hidden="true" />
+          <span>3 FRACTURES</span>
+        </p>
+      </section>
+
       <section className="entry-card">
         <div className="entry-card-heading">
           <div className="entry-emblem" aria-hidden="true">
@@ -608,9 +637,22 @@ export function GameClient() {
         if (inFlight || stopped) return;
         inFlight = true;
         const saved = readSession();
+        const deepLink = new URLSearchParams(window.location.search);
+        const deepLinkCode = (deepLink.get("room") || "")
+          .replace(/[^a-z]/gi, "")
+          .toUpperCase()
+          .slice(0, 5);
+        const deepLinkName = (deepLink.get("name") || "Wanderer").slice(0, 18);
+        const joiningDeepLink =
+          firstRequest &&
+          !saved &&
+          deepLink.get("join") === "1" &&
+          deepLinkCode.length === 5;
         const action =
           saved && firstRequest && !saved.spectator
             ? "join_room"
+            : joiningDeepLink
+              ? "join_room"
             : saved
               ? "get_state"
               : "health";
@@ -624,6 +666,11 @@ export function GameClient() {
                   name: saved.name,
                   token: saved.token,
                 }
+              : joiningDeepLink
+                ? {
+                    code: deepLinkCode,
+                    name: deepLinkName,
+                  }
               : {},
           );
           if (stopped) return;
@@ -641,11 +688,12 @@ export function GameClient() {
           setError("");
           if (reply.state) {
             receiveRoomState(reply.state, reply.protocol);
-            if (action === "join_room" && saved) {
+            if (action === "join_room") {
               const restored = {
-                ...saved,
-                token: reply.token ?? saved.token,
-                playerId: reply.playerId ?? saved.playerId,
+                code: reply.code || saved?.code || deepLinkCode,
+                name: saved?.name || deepLinkName,
+                token: reply.token ?? saved?.token ?? null,
+                playerId: reply.playerId ?? saved?.playerId ?? null,
                 spectator: reply.spectator,
               };
               setSession(restored);
@@ -1062,6 +1110,12 @@ export function GameClient() {
       }${authorityMode === "v1" ? " is-legacy-authority" : ""}${
         signalDanger ? " signal-danger" : ""
       }${broadcastMode ? " is-broadcast-mode" : ""}`}
+      data-active-seat={room.currentSeat ?? "none"}
+      data-phase={room.phase || room.status}
+      data-presentation={
+        room.presentationState || room.lastEvent?.presentationState || room.phase
+      }
+      data-self-active={self?.seat === room.currentSeat ? "true" : "false"}
     >
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {latestAnnouncement}

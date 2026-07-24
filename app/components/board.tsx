@@ -212,6 +212,21 @@ export function Board({
         </span>
       </div>
 
+      <div
+        className="board-authority-beacon"
+        data-self-active={self?.seat === room.currentSeat ? "true" : "false"}
+      >
+        <div>
+          <small>Active authority</small>
+          <strong>{activePlayer?.name || "The House"}</strong>
+          <span>{PHASE_LABELS[phase] || phase}</span>
+        </div>
+        <b aria-label={`${room.secondsLeft ?? 20} seconds remaining`}>
+          {room.status === "playing" ? room.secondsLeft ?? 20 : "—"}
+          <small>SEC</small>
+        </b>
+      </div>
+
       {self && (
         <div className="journey-plaque">
           <small>Your crossing</small>

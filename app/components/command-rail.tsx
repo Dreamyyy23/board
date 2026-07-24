@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { KIND_NAMES } from "../game-data";
 import type {
   Intent,
   Player,
@@ -21,6 +22,18 @@ const INTENT_COPY: Record<Intent, { title: string; body: string }> = {
     title: "BIND",
     body: "Tie this route to another traveler and form connection.",
   },
+};
+
+const INTENT_MARKS: Record<Intent, string> = {
+  claim: "▲",
+  shelter: "⬡",
+  bind: "∞",
+};
+
+const WITNESS_COPY: Record<SpaceClass, string> = {
+  light: "Reward road",
+  threshold: "Oracle or Council",
+  teeth: "Rift or Snare",
 };
 
 const OMEN_COPY: Record<string, string> = {
@@ -177,6 +190,14 @@ export function CommandRail({
     !spectatorPredicted &&
     (self ? Boolean(self.predictionAvailable) : true);
   const canUseIntentRelic = Boolean(active && phase === "intent");
+  const bendOptions = [-1, 0, 1].map((delta) => {
+    const natural = room.turn?.naturalRoll || 1;
+    const roll = Math.max(1, Math.min(6, natural + delta));
+    const destination = room.turn?.reachable?.find(
+      (candidate) => candidate.roll === roll,
+    );
+    return { delta, roll, destination };
+  });
   const chronicleEvents = room.events || [];
   const phaseTitle: Record<string, string> = {
     intent: "READ · INTENT · WITNESS",
@@ -534,7 +555,12 @@ export function CommandRail({
         </section>
       )}
 
-      <section className="action-dock" aria-label="Available actions">
+      <section
+        className="action-dock"
+        aria-label="Available actions"
+        data-action-phase={phase}
+        data-self-active={active ? "true" : "false"}
+      >
         {room.status === "lobby" && isHost && (
           <>
             <button
@@ -573,6 +599,7 @@ export function CommandRail({
               {(Object.keys(INTENT_COPY) as Intent[]).map((intent) => (
                 <button
                   aria-pressed={room.turn?.intent === intent}
+                  className={`intent-choice intent-choice--${intent}`}
                   disabled={busy}
                   key={intent}
                   onClick={() => {
@@ -581,8 +608,11 @@ export function CommandRail({
                   }}
                   type="button"
                 >
-                  <b>{INTENT_COPY[intent].title}</b>
-                  <small>{INTENT_COPY[intent].body}</small>
+                  <em aria-hidden="true">{INTENT_MARKS[intent]}</em>
+                  <span>
+                    <b>{INTENT_COPY[intent].title}</b>
+                    <small>{INTENT_COPY[intent].body}</small>
+                  </span>
                 </button>
               ))}
             </div>
@@ -619,12 +649,14 @@ export function CommandRail({
               {(["light", "threshold", "teeth"] as SpaceClass[]).map(
                 (prediction) => (
                   <button
+                    className={`witness-choice witness-choice--${prediction}`}
                     disabled={busy}
                     key={prediction}
                     onClick={() => predict(prediction)}
                     type="button"
                   >
-                    {prediction}
+                    <b>{prediction}</b>
+                    <small>{WITNESS_COPY[prediction]}</small>
                   </button>
                 ),
               )}
@@ -638,30 +670,30 @@ export function CommandRail({
             <span>
               NATURAL {room.turn?.naturalRoll} · choose final destination
             </span>
-            <div>
-              <button
-                disabled={
-                  busy ||
-                  (room.turn?.omen !== "door" && (self?.focus || 0) < 1)
-                }
-                onClick={() => onBend(-1)}
-                type="button"
-              >
-                −1 <small>spend Focus</small>
-              </button>
-              <button disabled={busy} onClick={() => onBend(0)} type="button">
-                ACCEPT <small>natural {room.turn?.naturalRoll}</small>
-              </button>
-              <button
-                disabled={
-                  busy ||
-                  (room.turn?.omen !== "door" && (self?.focus || 0) < 1)
-                }
-                onClick={() => onBend(1)}
-                type="button"
-              >
-                +1 <small>spend Focus</small>
-              </button>
+            <div className="bend-destinations">
+              {bendOptions.map(({ delta, roll, destination }) => (
+                <button
+                  className={`bend-destination road-class--${destination?.class || "light"}${delta === 0 ? " is-natural" : ""}`}
+                  disabled={
+                    busy ||
+                    (delta !== 0 &&
+                      room.turn?.omen !== "door" &&
+                      (self?.focus || 0) < 1)
+                  }
+                  key={delta}
+                  onClick={() => onBend(delta)}
+                  type="button"
+                >
+                  <em>{delta === 0 ? "ACCEPT" : delta < 0 ? "−1" : "+1"}</em>
+                  <b>
+                    {roll} · {destination ? KIND_NAMES[destination.kind] : "Road"}
+                  </b>
+                  <small>
+                    {destination?.class || "light"}
+                    {delta === 0 ? " · natural" : " · 1 Focus"}
+                  </small>
+                </button>
+              ))}
             </div>
             {room.turn?.ashAlternative && (
               <button

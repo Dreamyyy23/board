@@ -8,6 +8,7 @@ test("the board exposes native roll, reachability, movement, and reaction states
   const board = await read("../app/components/board.tsx");
 
   for (const contract of [
+    "board-authority-beacon",
     "die-face",
     "phase-transition-cue",
     "is-reachable",
@@ -17,6 +18,34 @@ test("the board exposes native roll, reachability, movement, and reaction states
   ]) {
     assert.match(board, new RegExp(contract));
   }
+});
+
+test("the vertical slice makes current decisions and destinations explicit", async () => {
+  const [client, commandRail, css] = await Promise.all([
+    read("../app/game-client.tsx"),
+    read("../app/components/command-rail.tsx"),
+    read("../app/entity-v5.css"),
+  ]);
+
+  assert.match(client, /entry-ritual-preview/);
+  assert.match(client, /data-presentation/);
+  assert.match(commandRail, /intent-choice--\$\{intent\}/);
+  assert.match(commandRail, /const INTENT_COPY/);
+  assert.match(commandRail, /claim:[\s\S]*?shelter:[\s\S]*?bind:/);
+  assert.match(commandRail, /bend-destinations/);
+  assert.match(css, /\.board-panel \{\s*order: 0;/);
+  assert.match(css, /\.command-rail \{\s*order: 1;/);
+});
+
+test("supplemental transmissions cannot obstruct ordinary or compact turns", async () => {
+  const stage = await read("../app/components/transmission-stage.tsx");
+
+  assert.match(stage, /const dramaticArrival =/);
+  assert.match(stage, /event\?\.severity === "critical"/);
+  assert.match(stage, /event\?\.severity === "major"/);
+  assert.match(stage, /hasTransmission \? \(dramaticArrival \? "takeover" : "docked"\)/);
+  assert.match(stage, /setCollapsedTransmission\(transmissionKey\)/);
+  assert.match(stage, /\}, 1_800\);/);
 });
 
 test("responsive and broadcast layouts keep a reduced-motion path", async () => {

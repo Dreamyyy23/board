@@ -307,7 +307,13 @@ export function TransmissionStage({
               iframe.allow =
                 "autoplay; encrypted-media; fullscreen; picture-in-picture";
               iframe.setAttribute("allowfullscreen", "");
-              setPlayerStatus("Receiver online");
+              const compactViewport = window.matchMedia(
+                "(max-width: 900px)",
+              ).matches;
+              setPlayerStatus(
+                compactViewport ? "Signal ready · open to play" : "Receiver online",
+              );
+              if (compactViewport) return;
               loadCurrentTransmission();
             },
             onStateChange: ({ data }) => {
@@ -369,16 +375,26 @@ export function TransmissionStage({
       takeoverTimerRef.current = null;
     }
 
+    const compactViewport = window.matchMedia("(max-width: 900px)").matches;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const dramaticArrival =
+      !compactViewport &&
+      !reducedMotion &&
+      (event?.severity === "critical" || event?.severity === "major");
+
     const phaseTimer = window.setTimeout(() => {
-      announcePhase(hasTransmission ? "takeover" : "idle");
-      if (hasTransmission) loadCurrentTransmission();
+      if (hasTransmission && compactViewport && transmissionKey) {
+        setCollapsedTransmission(transmissionKey);
+      }
+      announcePhase(
+        hasTransmission ? (dramaticArrival ? "takeover" : "docked") : "idle",
+      );
+      if (hasTransmission && !compactViewport) loadCurrentTransmission();
     }, 0);
 
-    if (hasTransmission) {
-      const stingerDuration =
-        event?.severity === "critical" || event?.severity === "major"
-          ? 2_500
-          : 1_200;
+    if (hasTransmission && dramaticArrival) {
       takeoverTimerRef.current = window.setTimeout(() => {
         announcePhase("docked");
         window.requestAnimationFrame(() => {
@@ -391,7 +407,7 @@ export function TransmissionStage({
           });
         });
         takeoverTimerRef.current = null;
-      }, stingerDuration);
+      }, 1_800);
     }
 
     return () => {
@@ -468,11 +484,14 @@ export function TransmissionStage({
         <button
           aria-expanded={!collapsed}
           className="transmission-stage__collapse"
-          onClick={() =>
-            setCollapsedTransmission((value) =>
-              value === transmissionKey ? null : transmissionKey,
-            )
-          }
+          onClick={() => {
+            if (collapsed) {
+              setCollapsedTransmission(null);
+              window.requestAnimationFrame(loadCurrentTransmission);
+              return;
+            }
+            setCollapsedTransmission(transmissionKey);
+          }}
           type="button"
         >
           {collapsed ? "OPEN" : "COLLAPSE"}
