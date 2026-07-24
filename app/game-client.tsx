@@ -17,6 +17,7 @@ import { Board } from "./components/board";
 import { CommandRail } from "./components/command-rail";
 import { MaskPortrait } from "./components/mask-portrait";
 import { SeatRail } from "./components/seat-rail";
+import { SupportPortal } from "./components/support-portal";
 import type { RoomState, ServerReply, Session } from "./game-types";
 
 const SERVER_URL =
@@ -140,6 +141,7 @@ function EntryScreen({
   roomCode,
   youtubeChannelUrl,
   authorityMode,
+  onSupport,
   onName,
   onRoomCode,
   onYoutubeChannelUrl,
@@ -153,6 +155,7 @@ function EntryScreen({
   roomCode: string;
   youtubeChannelUrl: string;
   authorityMode: AuthorityMode;
+  onSupport: () => void;
   onName: (value: string) => void;
   onRoomCode: (value: string) => void;
   onYoutubeChannelUrl: (value: string) => void;
@@ -319,6 +322,18 @@ function EntryScreen({
           <span>Six seats</span>
           <span>24-hour signal</span>
         </div>
+        <button
+          className="entry-support-trigger"
+          onClick={onSupport}
+          type="button"
+        >
+          <b aria-hidden="true">Ξ</b>
+          <span>
+            Support the table
+            <small>Open the Legend Nexus address</small>
+          </span>
+          <i aria-hidden="true">◇</i>
+        </button>
       </section>
 
       <section className="entry-mask-strip" aria-label="The six playable masks">
@@ -454,6 +469,9 @@ export function GameClient() {
   const [error, setError] = useState("");
   const [sound, setSound] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const openSupport = useCallback(() => setSupportOpen(true), []);
+  const closeSupport = useCallback(() => setSupportOpen(false), []);
   const lastRollRef = useRef<string>("");
   const lastTurnRef = useRef<number | null>(null);
   const collapseRef = useRef(0);
@@ -821,20 +839,26 @@ export function GameClient() {
 
   if (!room) {
     return (
-      <EntryScreen
-        connected={connected}
-        busy={busy}
-        error={error}
-        name={name}
-        roomCode={roomCode}
-        youtubeChannelUrl={youtubeChannelUrl}
-        authorityMode={authorityMode}
-        onName={setName}
-        onRoomCode={setRoomCode}
-        onYoutubeChannelUrl={setYoutubeChannelUrl}
-        onCreate={createRoom}
-        onJoin={joinRoom}
-      />
+      <>
+        <EntryScreen
+          connected={connected}
+          busy={busy}
+          error={error}
+          name={name}
+          roomCode={roomCode}
+          youtubeChannelUrl={youtubeChannelUrl}
+          authorityMode={authorityMode}
+          onSupport={openSupport}
+          onName={setName}
+          onRoomCode={setRoomCode}
+          onYoutubeChannelUrl={setYoutubeChannelUrl}
+          onCreate={createRoom}
+          onJoin={joinRoom}
+        />
+        {supportOpen && (
+          <SupportPortal onClose={closeSupport} />
+        )}
+      </>
     );
   }
 
@@ -888,6 +912,15 @@ export function GameClient() {
 
         <nav className="header-actions" aria-label="Game options">
           <button onClick={() => setHelpOpen(true)} type="button">Codex</button>
+          <button
+            aria-label="Support the table with Ethereum"
+            className="support-nav-button"
+            onClick={openSupport}
+            type="button"
+          >
+            <span className="support-nav-label">Support</span>
+            <span className="support-nav-short">ETH</span>
+          </button>
           <button
             aria-label={sound ? "Mute game sounds" : "Enable game sounds"}
             onClick={() => setSound((value) => !value)}
@@ -960,6 +993,9 @@ export function GameClient() {
       )}
 
       {helpOpen && <RulesModal room={room} onClose={() => setHelpOpen(false)} />}
+      {supportOpen && (
+        <SupportPortal onClose={closeSupport} />
+      )}
     </main>
   );
 }
