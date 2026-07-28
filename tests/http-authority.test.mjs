@@ -25,23 +25,25 @@ test("HTTP settlement exposes each consecutive bot landing as its own transmissi
   bendRoll(room, keeper.token, 0, { now: 2_020, rng: () => 0 });
   assert.equal(room.currentSeat, 1);
 
-  assert.equal(settleRoom(room, 3_000, { rng: () => 0 }), true);
+  // Bot tempo holds each cast ~6s and each bend ~2.5s so Witnesses can bet;
+  // settlement timestamps advance past those windows.
+  assert.equal(settleRoom(room, 9_000, { rng: () => 0 }), true);
   assert.equal(room.phase, "bend");
   assert.equal(room.currentSeat, 1);
   assert.equal(room.activeTransmission.landingSeat, 0);
 
-  assert.equal(settleRoom(room, 3_001, { rng: () => 0 }), true);
-  const firstState = publicRoomV4(room, 3_001);
+  assert.equal(settleRoom(room, 11_600, { rng: () => 0 }), true);
+  const firstState = publicRoomV4(room, 11_600);
   assert.equal(firstState.currentSeat, 2);
   assert.equal(firstState.activeTransmission.landingSeat, 1);
   assert.equal(firstState.turnNumber, 3);
 
-  assert.equal(settleRoom(room, 4_000, { rng: () => 0 }), true);
+  assert.equal(settleRoom(room, 18_000, { rng: () => 0 }), true);
   assert.equal(room.phase, "bend");
   assert.equal(room.currentSeat, 2);
 
-  assert.equal(settleRoom(room, 4_001, { rng: () => 0 }), true);
-  const secondState = publicRoomV4(room, 4_001);
+  assert.equal(settleRoom(room, 20_600, { rng: () => 0 }), true);
+  const secondState = publicRoomV4(room, 20_600);
   assert.equal(secondState.currentSeat, 0);
   assert.equal(secondState.activeTransmission.landingSeat, 2);
   assert.equal(secondState.turnNumber, 4);

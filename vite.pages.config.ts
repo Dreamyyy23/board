@@ -1,13 +1,14 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
+export default defineConfig(() => {
+  // The published Pages bundle must never inherit a developer's .env —
+  // baking localhost:3001 into index.html killed the live table for
+  // everyone. Only an EXPLICIT shell variable (used for local preview
+  // builds) may override the production authority.
   const gameServerUrl =
     process.env.VITE_GAME_SERVER_URL ||
     process.env.NEXT_PUBLIC_GAME_SERVER_URL ||
-    env.VITE_GAME_SERVER_URL ||
-    env.NEXT_PUBLIC_GAME_SERVER_URL ||
     "https://obscur-sixfold-road-v4.h-ar-d5-33-5-3.chatgpt.site/api/authority";
 
   return {

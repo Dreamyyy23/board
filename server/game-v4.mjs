@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 import {
   BEND_MS,
   BOARD_SIZE,
+  BOT_BEND_TEMPO_MS,
+  BOT_INTENT_TEMPO_MS,
+  BOT_ORACLE_TEMPO_MS,
   COUNCIL_EVENT_V4,
   COUNCIL_REVEAL_MS,
   DEFAULT_YOUTUBE_CHANNEL,
@@ -33,6 +36,122 @@ export const COMMAND_LEDGER_LIMIT = 320;
 export const FOCUS_MAX = 3;
 export const RESOLVE_MAX = 3;
 export const RELIC_CAPACITY = 2;
+// A BIND target holds exclusive first claim on Give Oxygen for this window.
+export const OXYGEN_PRIORITY_MS = 2_000;
+export const CHARM_CAPACITY = 2;
+export const WIDDERSHINS_COST = 2;
+
+/* ------------------------------------------------------------------ *
+ * V5 · THE LONG NIGHT — three-act escalation.
+ * The match darkens in acts keyed to the round counter. Acts are pure
+ * world-state: they never touch the 61s authority window, and every
+ * effect flows through the same event pipeline as omens and laws.
+ * ------------------------------------------------------------------ */
+export const ACTS = Object.freeze([
+  Object.freeze({
+    act: 1,
+    name: "Dusk",
+    kicker: "ACT I",
+    body: "The candles are tall. The road keeps its usual bargains.",
+  }),
+  Object.freeze({
+    act: 2,
+    name: "Deep Night",
+    kicker: "ACT II",
+    body: "An Omen rides every cast. Rewards run richer; the Teeth bite one deeper.",
+  }),
+  Object.freeze({
+    act: 3,
+    name: "The Thin Hour",
+    kicker: "ACT III",
+    body: "Echo rewards surge. The first Bend of every turn is free — the world is thin enough to push.",
+  }),
+]);
+
+export function actForRound(round) {
+  if (round <= 3) return 1;
+  if (round <= 7) return 2;
+  return 3;
+}
+
+export function actInfo(round) {
+  return ACTS[actForRound(round) - 1];
+}
+
+/* Crossroads dilemmas — the traveler whose turn opens a new act chooses
+ * for the whole table. Option A is generous (and the timeout default);
+ * option B is selfish. Effects use only Echo/Focus/vow primitives so a
+ * dilemma can never collide with the Fracture pipeline mid-resolution. */
+export const CROSSROADS_DECK = Object.freeze({
+  2: Object.freeze({
+    id: "lanterns-gutter",
+    title: "The Lanterns Gutter",
+    body: "Deep Night arrives at your feet. The table's lanterns dim, and only your hands are close enough to choose.",
+    options: Object.freeze([
+      Object.freeze({
+        key: "a",
+        label: "Feed your lantern to the dark",
+        summary: "You pay up to 2 Echoes. Every traveler draws +1 Focus from the shared light.",
+      }),
+      Object.freeze({
+        key: "b",
+        label: "Hoard the light",
+        summary: "You gain 2 Echoes. Every other traveler loses 1 Focus in the sudden dark.",
+      }),
+    ]),
+  }),
+  3: Object.freeze({
+    id: "thin-hour-toll",
+    title: "The Thin Hour Toll",
+    body: "The Thin Hour opens under your token. The road demands its toll — the only question is who carries it.",
+    options: Object.freeze([
+      Object.freeze({
+        key: "a",
+        label: "Carry them on your back",
+        summary: "You pay 1 Focus and up to 2 Echoes. Every traveler's Vow advances one step.",
+      }),
+      Object.freeze({
+        key: "b",
+        label: "The road eats the slow",
+        summary: "You gain 1 Echo and 1 Focus. Every other traveler loses 1 Echo to the toll.",
+      }),
+    ]),
+  }),
+});
+
+/* Charms — a between-cast Echo sink. Echoes are the scoring currency, so
+ * every purchase is tempo bought with victory. Bought only on your own
+ * Intent phase; at most two held; single-use. */
+export const CHARMS = Object.freeze({
+  "wax-seal": Object.freeze({
+    id: "wax-seal",
+    title: "Wax Seal",
+    price: 2,
+    trigger: "auto",
+    body: "The next harmful landing on your own turn loses its first point of harm. Melts on use.",
+  }),
+  "lantern-glimpse": Object.freeze({
+    id: "lantern-glimpse",
+    title: "Lantern Glimpse",
+    price: 1,
+    trigger: "turn",
+    body: "Turn one reachable road card face-up for the whole table before you commit.",
+  }),
+  "loaded-knuckle": Object.freeze({
+    id: "loaded-knuckle",
+    title: "Loaded Knuckle",
+    price: 2,
+    trigger: "turn",
+    body: "Pocket dice, pocket nerve: gain 1 Focus immediately.",
+  }),
+  "silver-string": Object.freeze({
+    id: "silver-string",
+    title: "Silver String",
+    price: 2,
+    trigger: "reaction",
+    body: "During a rescue window, snatch the first claim on Give Oxygen for yourself.",
+  }),
+});
 
 export const SPACE_CLASSES = Object.freeze({
   hearth: "light",
@@ -359,6 +478,90 @@ function pickEventV4(room, kind, rng, now = Date.now()) {
   return {
     ...v4Clone(list[randomIndex(room, list.length, rng)]),
     ...transmissionForV4(room, rng, now),
+  };
+}
+
+function telemetryV4(room) {
+  room.telemetry ||= {
+    oxygen: {
+      windows: 0,
+      priorityWindows: 0,
+      rescues: 0,
+      responseMsTotal: 0,
+    },
+    witness: { submissions: 0, correct: 0, boldCorrect: 0 },
+  };
+  room.telemetry.oxygen ||= {
+    windows: 0,
+    priorityWindows: 0,
+    rescues: 0,
+    responseMsTotal: 0,
+  };
+  room.telemetry.witness ||= { submissions: 0, correct: 0, boldCorrect: 0 };
+  return room.telemetry;
+}
+
+// Truthful class-level Intent annotations derived from the SAME modifier
+// state applyTurnModifiers/applyBindLanding/applyThresholdIntent will use.
+// Never reveals exact prepared events.
+function intentPreviewsV4(room) {
+  const claimTeethStatic = room.fractureModifier?.id === "sixth-wall" ? 2 : 1;
+  const shelterDulled = room.fractureModifier?.id === "lights-remember";
+  const annotations = {
+    claim: {
+      light: "+1 extra Echo on this landing",
+      threshold: "+1 Focus after the question resolves",
+      teeth: `+${claimTeethStatic} Static after this result`,
+    },
+    shelter: {
+      light: "Safe reward may be trimmed by 1 Echo",
+      threshold: "No pressure added",
+      teeth: shelterDulled
+        ? "Movement harm −1 · Lights Remember dulls the shelter"
+        : "First harm −1 · movement harm up to −2",
+    },
+    bind: {
+      light: "Bound traveler gains 1 Echo · a Golden Thread forms",
+      threshold: "You and the bound traveler each gain 1 Focus",
+      teeth: "Bound traveler holds first claim on Give Oxygen",
+    },
+  };
+  const active = room.currentSeat === null ? null : room.players[room.currentSeat];
+  const bindTargets = room.players
+    .filter(
+      (candidate) => candidate && active && candidate.seat !== active.seat,
+    )
+    .map((candidate) => ({
+      seat: candidate.seat,
+      name: candidate.name,
+      sigil: candidate.sigil,
+      maskId: candidate.mask.id,
+      echoes: candidate.echoes,
+      resolve: candidate.resolve,
+      focus: candidate.focus,
+      goldenThreads: candidate.goldenThreads,
+      threadStrength: Number(active?.relationships?.[candidate.seat] || 0),
+      qualified: Boolean(candidate.qualified),
+      needs: {
+        echoes: Math.max(0, WIN_ECHOES - candidate.echoes),
+        keys: Math.max(0, 1 - candidate.keys),
+        circuits: Math.max(0, 1 - candidate.laps),
+      },
+    }));
+  return { annotations, bindTargets };
+}
+
+function councilProjectionsV4(room) {
+  const lowest = room.players
+    .filter(Boolean)
+    .sort(
+      (left, right) => left.echoes - right.echoes || left.seat - right.seat,
+    )
+    .slice(0, Math.min(2, occupiedSeatsV4(room).length));
+  return {
+    watch: `Static ${room.signal} → ${Math.max(0, room.signal - 3)} · LIGHT rewards −1 Echo this round`,
+    open: "LIGHT +1 Echo · TEETH +1 Static this round",
+    knot: `${lowest.map((player) => player.sigil).join(" + ") || "The poorest"} gain 1 Echo now · CLAIM +1 Static this round`,
   };
 }
 
@@ -1274,13 +1477,50 @@ export function finishTurnV4(room, now = Date.now()) {
   return room;
 }
 
-export function beginGameV4(room, actorToken, now = Date.now()) {
+export const BOT_NAMES_V4 = Object.freeze([
+  "Moth",
+  "North",
+  "Palanca",
+  "Alabaster",
+  "Static",
+  "Lantern",
+]);
+
+export function addBotV4(room, actorToken, now = Date.now()) {
+  migrateRoomState(room, now);
+  if (room.hostToken !== actorToken) {
+    throw new Error("Only the table keeper can call an Echo.");
+  }
+  if (room.status !== "lobby") {
+    throw new Error("The crossing has already begun.");
+  }
+  const count = room.players.filter((player) => player?.bot).length;
+  return seatPlayerV4(room, {
+    name: BOT_NAMES_V4[count % BOT_NAMES_V4.length],
+    token: `bot-${crypto.randomUUID()}`,
+    bot: true,
+  });
+}
+
+export function beginGameV4(room, actorToken, now = Date.now(), options = {}) {
   migrateRoomState(room, now);
   if (room.hostToken !== actorToken) {
     throw new Error("Only the table keeper can begin.");
   }
   if (room.status !== "lobby" && room.status !== "finished") {
     throw new Error("The crossing has already begun.");
+  }
+  if (options.quickFill && room.status === "lobby") {
+    // One click into a living table: fill to a four-mask crossing (the host
+    // plus three Echoes) so solo players never face an empty lobby. Hosts
+    // who want more masks can still seat bots by hand first.
+    const targetSeats = clamp(Number(options.seats) || 4, 2, MAX_PLAYERS);
+    while (
+      occupiedSeatsV4(room).length < targetSeats &&
+      room.players.some((player) => !player)
+    ) {
+      addBotV4(room, actorToken, now);
+    }
   }
   const participants = occupiedSeatsV4(room);
   if (!participants.length) throw new Error("The table needs at least one traveler.");
@@ -1432,6 +1672,11 @@ export function selectIntent(
   const now = options.now ?? Date.now();
   migrateRoomState(room, now);
   const player = activePlayerFor(room, actorToken, PHASES.INTENT);
+  if (room.turn.intent) {
+    throw new Error(
+      "Your Intent is already locked for this turn. Cast the bone.",
+    );
+  }
   const normalized = String(intent || "").toLowerCase();
   if (!INTENTS.includes(normalized)) {
     throw new Error("Choose CLAIM, SHELTER, or BIND.");
@@ -1516,8 +1761,12 @@ export function submitPrediction(
     seat: actor.player?.seat,
     spectatorToken: actor.spectator?.token,
     prediction: normalized,
+    // A bold Witness swears on a MINORITY class among the six visible
+    // destinations. Correct bold calls earn an Echo on top of the Focus.
+    bold: Boolean(options.bold && actor.player),
     submittedAt: now,
   };
+  telemetryV4(room).witness.submissions += 1;
   if (actor.player) {
     actor.player.predictionTurnId = room.turn.id;
     actor.player.statistics.predictions += 1;
@@ -1534,6 +1783,17 @@ function revealPredictions(room, correctClass, now) {
   let correct = 0;
   let spectatorCorrect = 0;
   let spectatorTotal = 0;
+  // Bold calls only pay when the sworn class is genuinely a minority among
+  // the six visible destinations for this cast.
+  const reachableCounts = { light: 0, threshold: 0, teeth: 0 };
+  for (const destination of room.turn?.reachable || []) {
+    reachableCounts[destination.class] += 1;
+  }
+  const maxReachable = Math.max(
+    reachableCounts.light,
+    reachableCounts.threshold,
+    reachableCounts.teeth,
+  );
   for (const entry of Object.values(room.predictions)) {
     const isCorrect = entry.prediction === correctClass;
     if (isCorrect) correct += 1;
@@ -1547,8 +1807,30 @@ function revealPredictions(room, correctClass, now) {
         player.focus = clamp(player.focus + 1, 0, FOCUS_MAX);
         player.predictionRewardRound = room.round;
         player.statistics.correctPredictions += 1;
-        if (room.fractureModifier?.id === "sixth-wall") {
-          player.goldenThreads += 1;
+        telemetryV4(room).witness.correct += 1;
+        if (
+          entry.bold &&
+          reachableCounts[entry.prediction] > 0 &&
+          reachableCounts[entry.prediction] < maxReachable
+        ) {
+          player.echoes += 1;
+          player.statistics.boldWitness =
+            (player.statistics.boldWitness || 0) + 1;
+          telemetryV4(room).witness.boldCorrect += 1;
+          appendGameEvent(
+            room,
+            {
+              type: "bold-witness",
+              actorSeat: player.seat,
+              deltas: [
+                { seat: player.seat, resource: "echoes", amount: 1 },
+                { seat: player.seat, resource: "focus", amount: 1 },
+              ],
+              title: `${player.sigil} SWORE THE MINORITY ROAD`,
+              summary: `${player.name} called ${entry.prediction.toUpperCase()} against the odds and earned an Echo with the Focus.`,
+            },
+            now,
+          );
         }
       }
     } else if (entry.type === "spectator") {
@@ -2232,11 +2514,20 @@ function openReaction(room, player, event, kind, className, now) {
     openedAt: now,
     helperSeat: null,
     resolved: false,
+    // The Golden Thread promise made at Intent time is ENFORCED here: for a
+    // short window only the bound traveler may answer with Oxygen.
+    priority:
+      boundSeat === null
+        ? null
+        : { seat: boundSeat, until: now + OXYGEN_PRIORITY_MS },
   };
   room.turn.reactionEligibleSeats = eligibleSeats;
   room.phase = PHASES.REACTION;
   room.deadline = now + REACTION_MS;
   room.presentationState = "event-reveal";
+  const telemetry = telemetryV4(room);
+  if (eligibleSeats.length) telemetry.oxygen.windows += 1;
+  if (boundSeat !== null) telemetry.oxygen.priorityWindows += 1;
   appendGameEvent(
     room,
     {
@@ -2245,7 +2536,10 @@ function openReaction(room, player, event, kind, className, now) {
       targetSeats: eligibleSeats,
       severity: "major",
       title: "GIVE OXYGEN?",
-      summary: `${player.name} faces ${totalHarm(event)} harm; another traveler may intervene.`,
+      summary:
+        boundSeat === null
+          ? `${player.name} faces ${totalHarm(event)} harm; another traveler may intervene.`
+          : `${player.name} faces ${totalHarm(event)} harm; the bound ${room.players[boundSeat]?.sigil || "traveler"} holds first claim.`,
       presentationState: "event-reveal",
     },
     now,
@@ -2331,6 +2625,11 @@ function openCouncilV4(room, player, event, now) {
   const votes = {};
   for (const candidate of room.players.filter(Boolean)) {
     if (candidate.bot) votes[candidate.seat] = deterministicCouncilChoice(room, candidate);
+  }
+  // Every stone shows its projected table-wide effect BEFORE the secret vote.
+  const projections = councilProjectionsV4(room);
+  for (const choice of event.choices || []) {
+    if (projections[choice.id]) choice.projection = projections[choice.id];
   }
   room.pendingCouncil = {
     id: newId("council"),
@@ -2484,6 +2783,16 @@ export function bendRoll(room, actorToken, delta = 0, options = {}) {
   if (![0, -1, 1].includes(adjustment)) {
     throw new Error("A normal Bend may move only one edge.");
   }
+  if (
+    adjustment !== 0 &&
+    clamp(room.turn.naturalRoll + adjustment, 1, 6) === room.turn.naturalRoll
+  ) {
+    throw new Error(
+      room.turn.naturalRoll <= 1
+        ? "Natural 1 has no lower edge. Accept the cast or Bend +1."
+        : "Natural 6 has no higher edge. Accept the cast or Bend −1.",
+    );
+  }
   if (adjustment !== 0) {
     if (room.turn.omen === "door" && !room.turn.freeBendUsed) {
       room.turn.freeBendUsed = true;
@@ -2582,6 +2891,15 @@ export function giveOxygen(room, actorToken, options = {}) {
   if (!reaction.eligibleSeats.includes(helper.seat)) {
     throw new Error("That mask is not eligible for this reaction.");
   }
+  if (
+    reaction.priority &&
+    now < reaction.priority.until &&
+    helper.seat !== reaction.priority.seat
+  ) {
+    throw new Error(
+      "The Golden Thread holds first claim for another breath.",
+    );
+  }
   if (helper.oxygenUsedRound === room.round) {
     throw new Error("You already Gave Oxygen this round.");
   }
@@ -2597,6 +2915,9 @@ export function giveOxygen(room, actorToken, options = {}) {
   helper.statistics.oxygenGiven += 1;
   victim.statistics.oxygenReceived += 1;
   reaction.helperSeat = helper.seat;
+  const oxygenTelemetry = telemetryV4(room).oxygen;
+  oxygenTelemetry.rescues += 1;
+  oxygenTelemetry.responseMsTotal += Math.max(0, now - reaction.openedAt);
   formGoldenThread(room, helper, victim, now, { both: threadOmen });
   if (helper.mask.id === "moss") {
     helper.echoes += 1;
@@ -2680,6 +3001,11 @@ export function activateMaskPower(room, actorToken, payload = {}, options = {}) 
     const delta = Number(payload.delta);
     if (![1, -1].includes(delta)) {
       throw new Error("Crooked Road chooses one adjacent destination.");
+    }
+    if (clamp(room.turn.naturalRoll + delta, 1, 6) === room.turn.naturalRoll) {
+      throw new Error(
+        "Crooked Road cannot bend past the road's edge. Choose the other side.",
+      );
     }
     room.turn.finalRoll = clamp(room.turn.naturalRoll + delta, 1, 6);
     room.turn.bendDelta = delta;
@@ -3286,7 +3612,9 @@ function destinationUtility(destination) {
 
 function botBend(room, player) {
   const natural = room.turn.naturalRoll;
-  const options = [-1, 0, 1]
+  // Delta 0 comes first so the edge-clamped duplicates (a paid no-op the
+  // authority now rejects) are the candidates that dedupe away.
+  const options = [0, -1, 1]
     .map((delta) => ({
       delta,
       roll: clamp(natural + delta, 1, 6),
@@ -3340,6 +3668,15 @@ export function settleExpiredPhase(room, now = Date.now(), options = {}) {
 
   if (room.phase === PHASES.INTENT) {
     if (!expired && !botTurn) return false;
+    // Bot tempo: hold the cast long enough for human Witnesses to read the
+    // road and place a prediction. Expiry always overrides the tempo.
+    if (
+      botTurn &&
+      !expired &&
+      now - (room.turn?.startedAt || 0) < BOT_INTENT_TEMPO_MS
+    ) {
+      return false;
+    }
     if (botTurn && active.maskCharge && ["moon", "ash"].includes(active.mask.id)) {
       try {
         activateMaskPower(room, active.token, {}, { now, rng: options.rng });
@@ -3368,6 +3705,15 @@ export function settleExpiredPhase(room, now = Date.now(), options = {}) {
   }
   if (room.phase === PHASES.BEND) {
     if (!expired && !botTurn) return false;
+    // Let the table see the natural cast land before a bot answers it.
+    if (
+      botTurn &&
+      !expired &&
+      room.deadline &&
+      now - (room.deadline - BEND_MS) < BOT_BEND_TEMPO_MS
+    ) {
+      return false;
+    }
     if (botTurn && active.maskCharge && active.mask.id === "ember") {
       const naturalDestination = room.turn.reachable.find(
         (entry) => entry.roll === room.turn.naturalRoll,
@@ -3407,7 +3753,10 @@ export function settleExpiredPhase(room, now = Date.now(), options = {}) {
   }
   if (room.phase === PHASES.REACTION) {
     const reaction = room.pendingReaction;
+    const priorityActive =
+      reaction?.priority && now < reaction.priority.until;
     const botHelper = reaction?.eligibleSeats
+      .filter((seat) => !priorityActive || seat === reaction.priority.seat)
       .map((seat) => room.players[seat])
       .find(
         (player) =>
@@ -3433,6 +3782,13 @@ export function settleExpiredPhase(room, now = Date.now(), options = {}) {
   }
   if (room.phase === PHASES.ORACLE) {
     if (!expired && !room.players[room.pendingChoice?.seat]?.bot) return false;
+    if (
+      !expired &&
+      room.deadline &&
+      now - (room.deadline - TURN_MS) < BOT_ORACLE_TEMPO_MS
+    ) {
+      return false;
+    }
     const player = room.players[room.pendingChoice.seat];
     const choice = botOracleChoice(room, player);
     answerChoiceV4(room, null, choice.id, {
@@ -3492,7 +3848,13 @@ export function executeGameCommand(
   let result;
   switch (action) {
     case "start_game":
-      result = beginGameV4(room, payload.token, now);
+      result = beginGameV4(room, payload.token, now, {
+        quickFill: Boolean(payload.quickFill),
+        seats: Number(payload.seats) || undefined,
+      });
+      break;
+    case "add_bot":
+      result = addBotV4(room, payload.token, now);
       break;
     case "claim_seat":
       result = claimSeatV4(room, payload.token, Number(payload.seat), now);
@@ -3516,6 +3878,7 @@ export function executeGameCommand(
       result = submitPrediction(room, payload.token, payload.prediction, {
         now,
         spectatorId: payload.spectatorId,
+        bold: Boolean(payload.bold),
       });
       break;
     case "cast":
@@ -3645,6 +4008,7 @@ function publicTurnV4(room) {
   if (!room.turn) return null;
   const turn = v4Clone(room.turn);
   delete turn.preparedEvents;
+  turn.intentPreviews = intentPreviewsV4(room);
   return turn;
 }
 
@@ -3711,6 +4075,17 @@ export function publicRoomV4(room, now = Date.now()) {
     turn: publicTurnV4(room),
     deadline: room.deadline,
     secondsLeft,
+    // The client reads authority timing from state instead of hard-coding it.
+    phaseBudgets: {
+      intent: TURN_MS / 1000,
+      oracle: TURN_MS / 1000,
+      "council-vote": TURN_MS / 1000,
+      bend: BEND_MS / 1000,
+      reaction: REACTION_MS / 1000,
+      fracture: FRACTURE_MS / 1000,
+      "council-reveal": COUNCIL_REVEAL_MS / 1000,
+    },
+    telemetry: v4Clone(telemetryV4(room)),
     pendingChoice: room.pendingChoice
       ? {
           id: room.pendingChoice.id,
@@ -3728,6 +4103,9 @@ export function publicRoomV4(room, now = Date.now()) {
           class: room.pendingReaction.class,
           eligibleSeats: [...room.pendingReaction.eligibleSeats],
           helperSeat: room.pendingReaction.helperSeat,
+          priority: room.pendingReaction.priority
+            ? { ...room.pendingReaction.priority }
+            : null,
         }
       : null,
     signal: Math.max(0, Math.min(SIGNAL_MAX, room.signal)),

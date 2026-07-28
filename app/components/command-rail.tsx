@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
-import { KIND_NAMES } from "../game-data";
+import { BOARD_SIZE, KIND_NAMES, SPACE_KINDS } from "../game-data";
 import type {
   Intent,
   Player,
   RoomState,
   SpaceClass,
 } from "../game-types";
+import { CoachHint } from "./coach-hint";
 import { MaskPortrait } from "./mask-portrait";
+import { RollPicker } from "./roll-picker";
 import { TransmissionStage } from "./transmission-stage";
 
 const INTENT_COPY: Record<Intent, { title: string; body: string }> = {
@@ -118,6 +120,8 @@ export function CommandRail({
   onStart,
   onAddBot,
   onIntent,
+  onCast,
+  onPreviewIntent,
   onPrediction,
   onBend,
   onLegacyTune,
@@ -137,12 +141,14 @@ export function CommandRail({
   onStart: () => void;
   onAddBot: () => void;
   onIntent: (intent: Intent, targetSeat?: number) => void;
-  onPrediction: (prediction: SpaceClass) => void;
+  onCast: () => void;
+  onPreviewIntent?: (intent: Intent | null) => void;
+  onPrediction: (prediction: SpaceClass, bold?: boolean) => void;
   onBend: (delta: number, useAshEvent?: boolean) => void;
   onLegacyTune: (amount: number) => void;
   onGiveOxygen: () => void;
   onMaskPower: (payload?: Record<string, unknown>) => void;
-  onUseRelic: (id: string) => void;
+  onUseRelic: (id: string, extra?: Record<string, unknown>) => void;
   onGift: (seat: number) => void;
   onStreamerMode: (enabled: boolean) => void;
   onTransmissionFailure?: (failure: {
@@ -154,6 +160,9 @@ export function CommandRail({
   const [tab, setTab] = useState<"event" | "chronicle">("event");
   const [bindOpen, setBindOpen] = useState(false);
   const [predictedTurn, setPredictedTurn] = useState<string | null>(null);
+  const [boldWitness, setBoldWitness] = useState(false);
+  const [moonPickerOpen, setMoonPickerOpen] = useState(false);
+  const [foxfirePickerOpen, setFoxfirePickerOpen] = useState(false);
   const active = room.currentSeat === self?.seat;
   const phase = room.phase || "intent";
   const v4 = Number(room.rulesVersion || 0) >= 4;
@@ -163,11 +172,12 @@ export function CommandRail({
   const transmission = room.activeTransmission;
   const seconds = room.secondsLeft ?? 61;
   const phaseBudget =
-    phase === "bend" || phase === "reaction"
+    room.phaseBudgets?.[phase] ??
+    (phase === "bend" || phase === "reaction"
       ? 5
       : phase === "council-reveal"
         ? 1
-        : 61;
+        : 61);
   const progress = Math.max(0, Math.min(100, (seconds / phaseBudget) * 100));
   const currentPlayer =
     room.currentSeat === null ? null : room.players[room.currentSeat];
@@ -190,14 +200,112 @@ export function CommandRail({
     !spectatorPredicted &&
     (self ? Boolean(self.predictionAvailable) : true);
   const canUseIntentRelic = Boolean(active && phase === "intent");
-  const bendOptions = [-1, 0, 1].map((delta) => {
-    const natural = room.turn?.naturalRoll || 1;
-    const roll = Math.max(1, Math.min(6, natural + delta));
-    const destination = room.turn?.reachable?.find(
-      (candidate) => candidate.roll === roll,
-    );
-    return { delta, roll, destination };
-  });
+  const reactionVictim = Boolean(
+    phase === "reaction" &&
+      room.pendingReaction &&
+      room.pendingReaction.victimSeat === self?.seat,
+  );
+  // Per-relic, per-phase legality mirroring the authority: Quiet Bell and
+  // Foxfire Lens act during the owner's Intent; Mirror Shard also answers
+  // during the owner's own harmful reaction window.
+  const relicLegal = (relicId: string) => {
+    if (relicId === "mirror-shard") {
+      return canUseIntentRelic || (reactionVictim && active);
+    }
+    return canUseIntentRelic;
+  };
+  // Mirrors the authority's HARM_FIELDS: Echoes, Resolve, and movement.
+  const reactionHarm = ["deltaEchoes", "deltaResolve", "move"]
+    .map((field) =>
+      Math.max(
+        0,
+        -Number(
+          (room.pendingReaction?.event as Record<string, unknown> | undefined)?.[
+            field
+          ] || 0,
+        ),
+      ),
+    )
+    .reduce((total, amount) => total + amount, 0);
+  const selfMirrorShard = Boolean(
+    self?.relics.some((relic) => relic.id === "mirror-shard"),
+  );
+  const intent = room.turn?.intent || null;
+  const bindTarget =
+    room.turn?.bindTargetSeat === null || room.turn?.bindTargetSeat === undefined
+      ? null
+      : room.players[room.turn.bindTargetSeat];
+  const freeBend = room.turn?.omen === "door" && !room.turn?.freeBendUsed;
+  const natural = room.turn?.naturalRoll || 1;
+  // Edge results collapse: never present a paid Bend whose destination equals
+  // the natural result (the authority rejects those as no-ops).
+  const bendOptions = [-1, 0, 1]
+    .map((delta) => {
+      const roll = Math.max(1, Math.min(6, natural + delta));
+      const destination = room.turn?.reachable?.find(
+        (candidate) => candidate.roll === roll,
+      );
+      return { delta, roll, destination };
+    })
+    .filter(({ delta, roll }) => delta === 0 || roll !== natural);
+  const previews = room.turn?.intentPreviews;
+  const classCounts = (["light", "threshold", "teeth"] as SpaceClass[]).map(
+    (kind) => ({
+      kind,
+      count: (room.turn?.reachable || []).filter(
+        (destination) => destination.class === kind,
+      ).length,
+    }),
+  );
+  const maxClassCount = Math.max(...classCounts.map(({ count }) => count), 0);
+  const reactionPriority = room.pendingReaction?.priority || null;
+  const priorityHolder =
+    reactionPriority === null ? null : room.players[reactionPriority.seat];
+  // Veil chooses the EXACT consequence to cancel when several harms exist.
+  const veilHarmChoices =
+    phase === "reaction" && room.pendingReaction
+      ? (
+          [
+            ["deltaEchoes", "Echo loss"],
+            ["deltaResolve", "Resolve loss"],
+            ["move", "Forced movement"],
+          ] as const
+        )
+          .map(([field, label]) => ({
+            field,
+            label,
+            amount: Math.abs(
+              Math.min(
+                0,
+                Number(
+                  (room.pendingReaction?.event as Record<string, unknown>)[
+                    field
+                  ] || 0,
+                ),
+              ),
+            ),
+          }))
+          .filter((candidate) => candidate.amount > 0)
+      : [];
+  // Ember's Carry the Flame preview: destination, class, Static, Hearth.
+  const emberPreview = (() => {
+    if (!self || self.mask.id !== "ember" || natural === null) return null;
+    const steps = natural + 2;
+    const destination = (self.position + steps) % BOARD_SIZE;
+    const kind = SPACE_KINDS[destination];
+    const kindClass =
+      kind === "oracle" || kind === "council"
+        ? "threshold"
+        : kind === "rift" || kind === "snare"
+          ? "teeth"
+          : "light";
+    return {
+      destination,
+      kind,
+      kindClass,
+      crossesHearth: self.position + steps >= BOARD_SIZE,
+    };
+  })();
   const chronicleEvents = room.events || [];
   const phaseTitle: Record<string, string> = {
     intent: "READ · INTENT · WITNESS",
@@ -228,7 +336,8 @@ export function CommandRail({
 
   function predict(prediction: SpaceClass) {
     setPredictedTurn(witnessKey);
-    onPrediction(prediction);
+    onPrediction(prediction, boldWitness);
+    setBoldWitness(false);
   }
 
   return (
@@ -302,9 +411,12 @@ export function CommandRail({
       />
 
       {v4 && room.omen && (
-        <div className={`omen-law omen-law--${room.omen}`}>
-          <span>{room.omen.toUpperCase()} OMEN</span>
-          <p>{OMEN_COPY[room.omen]}</p>
+        <div className={`omen-law omen-law--${room.omen}`} key={room.omen}>
+          <i aria-hidden="true" className="omen-sigil" data-omen={room.omen} />
+          <div>
+            <span>{room.omen.toUpperCase()} OMEN</span>
+            <p>{OMEN_COPY[room.omen]}</p>
+          </div>
         </div>
       )}
 
@@ -357,6 +469,7 @@ export function CommandRail({
 
           {room.pendingChoice?.event.choices && (
             <div className="choice-stack">
+              {choiceIsMine && <CoachHint topic="oracle" />}
               {room.pendingChoice.event.choices.map((choice) => (
                 <button
                   disabled={!choiceIsMine || busy}
@@ -387,6 +500,9 @@ export function CommandRail({
                   /{room.players.filter(Boolean).length}
                 </b>
               </div>
+              {council.stage !== "reveal" && self && !alreadyVoted && (
+                <CoachHint topic="council" />
+              )}
               {council.stage !== "reveal" &&
                 council.event.choices.map((choice) => (
                   <button
@@ -397,6 +513,11 @@ export function CommandRail({
                   >
                     <span>{choice.label}</span>
                     <small>{choice.result}</small>
+                    {choice.projection && (
+                      <em className="council-projection">
+                        NOW · {choice.projection}
+                      </em>
+                    )}
                   </button>
                 ))}
               {council.stage === "reveal" && (
@@ -530,9 +651,13 @@ export function CommandRail({
             <div>
               {self.relics.map((relic) => (
                 <button
-                  disabled={!canUseIntentRelic || busy}
+                  disabled={!relicLegal(relic.id) || busy}
                   key={relic.id}
-                  onClick={() => onUseRelic(relic.id)}
+                  onClick={() =>
+                    relic.id === "foxfire-lens"
+                      ? setFoxfirePickerOpen(true)
+                      : onUseRelic(relic.id)
+                  }
                   title={relic.description}
                   type="button"
                 >
@@ -551,6 +676,19 @@ export function CommandRail({
                 ),
               )}
             </div>
+            {foxfirePickerOpen && (
+              <RollPicker
+                busy={busy}
+                hint="The Lens burns away when the two roads are revealed."
+                onCancel={() => setFoxfirePickerOpen(false)}
+                onConfirm={(results) => {
+                  setFoxfirePickerOpen(false);
+                  onUseRelic("foxfire-lens", { results });
+                }}
+                room={room}
+                title="FOXFIRE LENS"
+              />
+            )}
           </div>
         </section>
       )}
@@ -592,75 +730,168 @@ export function CommandRail({
           </>
         )}
 
-        {v4 && room.status === "playing" && phase === "intent" && active && (
-          <div className="phase-actions intent-actions">
-            <span>Choose before the server cast</span>
-            <div className="intent-grid">
-              {(Object.keys(INTENT_COPY) as Intent[]).map((intent) => (
-                <button
-                  aria-pressed={room.turn?.intent === intent}
-                  className={`intent-choice intent-choice--${intent}`}
-                  disabled={busy}
-                  key={intent}
-                  onClick={() => {
-                    if (intent === "bind") setBindOpen(true);
-                    else onIntent(intent);
-                  }}
-                  type="button"
-                >
-                  <em aria-hidden="true">{INTENT_MARKS[intent]}</em>
-                  <span>
-                    <b>{INTENT_COPY[intent].title}</b>
-                    <small>{INTENT_COPY[intent].body}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-            {bindOpen && self && (
-              <div className="bind-targets">
-                <span>Bind to one occupied mask</span>
-                {room.players
-                  .filter(
-                    (player): player is Player =>
-                      Boolean(player && player.id !== self.id),
-                  )
-                  .map((player) => (
-                    <button
-                      disabled={busy}
-                      key={player.id}
-                      onClick={() => {
-                        onIntent("bind", player.seat);
-                        setBindOpen(false);
-                      }}
-                      type="button"
-                    >
-                      {player.sigil} · {player.name}
-                    </button>
-                  ))}
+        {v4 &&
+          room.status === "playing" &&
+          phase === "intent" &&
+          active &&
+          !intent && (
+            <div className="phase-actions intent-actions">
+              <span>Choose before the server cast</span>
+              <CoachHint topic="intent" />
+              <div className="intent-grid">
+                {(Object.keys(INTENT_COPY) as Intent[]).map((intent) => (
+                  <button
+                    aria-pressed={room.turn?.intent === intent}
+                    className={`intent-choice intent-choice--${intent}`}
+                    disabled={busy}
+                    key={intent}
+                    onBlur={() => onPreviewIntent?.(null)}
+                    onClick={() => {
+                      if (intent === "bind") setBindOpen(true);
+                      else onIntent(intent);
+                    }}
+                    onFocus={() => onPreviewIntent?.(intent)}
+                    onMouseEnter={() => onPreviewIntent?.(intent)}
+                    onMouseLeave={() => onPreviewIntent?.(null)}
+                    type="button"
+                  >
+                    <em aria-hidden="true">{INTENT_MARKS[intent]}</em>
+                    <span>
+                      <b>{INTENT_COPY[intent].title}</b>
+                      <small>{INTENT_COPY[intent].body}</small>
+                      {previews && (
+                        <i className="intent-forecast">
+                          {intent === "bind"
+                            ? previews.annotations.bind.teeth
+                            : classCounts
+                                .filter(({ count }) => count > 0)
+                                .map(
+                                  ({ kind, count }) =>
+                                    `${kind.toUpperCase()} ×${count}`,
+                                )
+                                .join(" · ")}
+                        </i>
+                      )}
+                    </span>
+                  </button>
+                ))}
               </div>
-            )}
+              {bindOpen && self && (
+                <div className="bind-targets">
+                  <span>Bind to one occupied mask</span>
+                  {(previews?.bindTargets || [])
+                    .filter((target) => target.seat !== self.seat)
+                    .map((target) => (
+                      <button
+                        className="bind-target-dossier"
+                        disabled={busy}
+                        key={target.seat}
+                        onClick={() => {
+                          onIntent("bind", target.seat);
+                          setBindOpen(false);
+                        }}
+                        type="button"
+                      >
+                        <b>
+                          {target.sigil} · {target.name}
+                        </b>
+                        <small>
+                          {target.echoes} Echoes · {target.resolve} Resolve ·{" "}
+                          {target.threadStrength > 0
+                            ? `Thread ×${target.threadStrength}`
+                            : "No thread yet"}
+                        </small>
+                        <em>
+                          {target.qualified
+                            ? "ALREADY QUALIFIED"
+                            : `Needs ${target.needs.echoes}E · ${target.needs.keys}K · ${target.needs.circuits}C`}
+                          {" · LIGHT gifts them an Echo · first Oxygen claim"}
+                        </em>
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+        {v4 && room.status === "playing" && phase === "intent" && active && intent && (
+          <div className="phase-actions intent-locked-actions">
+            <CoachHint topic="cast" />
+            <div className="intent-locked-summary" role="status">
+              <em aria-hidden="true">{INTENT_MARKS[intent]}</em>
+              <span>
+                <small>Intent locked · immutable this turn</small>
+                <b>
+                  {INTENT_COPY[intent].title}
+                  {intent === "bind" && bindTarget
+                    ? ` → ${bindTarget.sigil} ${bindTarget.name}`
+                    : ""}
+                </b>
+              </span>
+            </div>
+            <button
+              className="game-button game-button--primary cast-now"
+              disabled={busy}
+              onClick={onCast}
+              type="button"
+            >
+              <span className="button-icon">◆</span>
+              <span>
+                <b>Cast the bone</b>
+                <small>The authority rolls the natural d6 now</small>
+              </span>
+            </button>
           </div>
         )}
 
         {canPredict && (
           <div className="phase-actions witness-actions">
             <span>WITNESS · predict the natural destination class</span>
+            <CoachHint topic="witness" />
             <div>
               {(["light", "threshold", "teeth"] as SpaceClass[]).map(
-                (prediction) => (
-                  <button
-                    className={`witness-choice witness-choice--${prediction}`}
-                    disabled={busy}
-                    key={prediction}
-                    onClick={() => predict(prediction)}
-                    type="button"
-                  >
-                    <b>{prediction}</b>
-                    <small>{WITNESS_COPY[prediction]}</small>
-                  </button>
-                ),
+                (prediction) => {
+                  const count =
+                    classCounts.find(({ kind }) => kind === prediction)
+                      ?.count || 0;
+                  const minority = count > 0 && count < maxClassCount;
+                  return (
+                    <button
+                      className={`witness-choice witness-choice--${prediction}${
+                        boldWitness && !minority ? " is-bold-blocked" : ""
+                      }`}
+                      disabled={busy || count === 0}
+                      key={prediction}
+                      onClick={() => predict(prediction)}
+                      type="button"
+                    >
+                      <b>
+                        {prediction} ×{count}
+                      </b>
+                      <small>
+                        {WITNESS_COPY[prediction]}
+                        {minority ? " · minority" : ""}
+                      </small>
+                    </button>
+                  );
+                },
               )}
             </div>
+            {self && (
+              <label className="bold-witness-toggle">
+                <input
+                  checked={boldWitness}
+                  onChange={(event) => setBoldWitness(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  <b>Swear a BOLD call</b>
+                  <small>
+                    A correct minority-road call pays +1 Echo with the Focus.
+                  </small>
+                </span>
+              </label>
+            )}
             <small>Correct once per round: +1 Focus.</small>
           </div>
         )}
@@ -675,10 +906,7 @@ export function CommandRail({
                 <button
                   className={`bend-destination road-class--${destination?.class || "light"}${delta === 0 ? " is-natural" : ""}`}
                   disabled={
-                    busy ||
-                    (delta !== 0 &&
-                      room.turn?.omen !== "door" &&
-                      (self?.focus || 0) < 1)
+                    busy || (delta !== 0 && !freeBend && (self?.focus || 0) < 1)
                   }
                   key={delta}
                   onClick={() => onBend(delta)}
@@ -690,7 +918,11 @@ export function CommandRail({
                   </b>
                   <small>
                     {destination?.class || "light"}
-                    {delta === 0 ? " · natural" : " · 1 Focus"}
+                    {delta === 0
+                      ? " · natural"
+                      : freeBend
+                        ? " · DOOR · free"
+                        : " · 1 Focus"}
                   </small>
                 </button>
               ))}
@@ -737,14 +969,41 @@ export function CommandRail({
             <span>
               {room.players[room.pendingReaction?.victimSeat || 0]?.name} faces{" "}
               {room.pendingReaction?.event.title}
+              {reactionHarm > 0 ? ` · ${reactionHarm} harm` : ""}
             </span>
+            {self?.oxygenAvailable && <CoachHint topic="reaction" />}
+            {reactionPriority && priorityHolder && (
+              <small
+                className={`oxygen-priority-note${
+                  self?.seat === reactionPriority.seat ? " is-yours" : ""
+                }`}
+              >
+                {self?.seat === reactionPriority.seat
+                  ? "The Golden Thread gives YOU first claim on this rescue."
+                  : `${priorityHolder.sigil} ${priorityHolder.name} holds the bound first claim for a moment.`}
+              </small>
+            )}
             {self?.oxygenAvailable && (
               <button disabled={busy} onClick={onGiveOxygen} type="button">
                 GIVE OXYGEN
                 <small>Prevent 2 harm · pay Resolve, then Echo</small>
               </button>
             )}
-            {!self?.oxygenAvailable && (
+            {reactionVictim && selfMirrorShard && (
+              <button
+                className="mirror-shard-reaction"
+                disabled={busy}
+                onClick={() => onUseRelic("mirror-shard")}
+                type="button"
+              >
+                MIRROR SHARD
+                <small>
+                  Turn the glass now · prevent up to 2 of {reactionHarm} harm ·
+                  consumes the relic
+                </small>
+              </button>
+            )}
+            {!self?.oxygenAvailable && !(reactionVictim && selfMirrorShard) && (
               <small>First valid helper resolves this five-second window.</small>
             )}
           </div>
@@ -756,20 +1015,72 @@ export function CommandRail({
             <p>{self.mask.active.description}</p>
             {self.mask.id === "thorn" ? (
               <div>
+                {[-1, 1]
+                  .filter(
+                    (delta) =>
+                      Math.max(1, Math.min(6, natural + delta)) !== natural,
+                  )
+                  .map((delta) => {
+                    const roll = Math.max(1, Math.min(6, natural + delta));
+                    const destination = room.turn?.reachable?.find(
+                      (candidate) => candidate.roll === roll,
+                    );
+                    return (
+                      <button
+                        disabled={busy}
+                        key={delta}
+                        onClick={() => onMaskPower({ delta })}
+                        type="button"
+                      >
+                        CROOKED {delta < 0 ? "−1" : "+1"}
+                        <small>
+                          {roll} ·{" "}
+                          {destination
+                            ? `${KIND_NAMES[destination.kind]} · ${destination.class.toUpperCase()}`
+                            : "Road"}
+                        </small>
+                      </button>
+                    );
+                  })}
+              </div>
+            ) : self.mask.id === "moon" ? (
+              moonPickerOpen ? (
+                <RollPicker
+                  busy={busy}
+                  hint="The exact events under your two chosen roads become public knowledge."
+                  onCancel={() => setMoonPickerOpen(false)}
+                  onConfirm={(results) => {
+                    setMoonPickerOpen(false);
+                    onMaskPower({ results });
+                  }}
+                  room={room}
+                  title="HEAR WHAT COMES NEXT"
+                />
+              ) : (
                 <button
                   disabled={busy}
-                  onClick={() => onMaskPower({ delta: -1 })}
+                  onClick={() => setMoonPickerOpen(true)}
                   type="button"
                 >
-                  CROOKED −1
+                  CHOOSE TWO ROADS TO HEAR
                 </button>
-                <button
-                  disabled={busy}
-                  onClick={() => onMaskPower({ delta: 1 })}
-                  type="button"
-                >
-                  CROOKED +1
-                </button>
+              )
+            ) : self.mask.id === "veil" && veilHarmChoices.length > 0 ? (
+              <div className="veil-cut-choices">
+                {veilHarmChoices.map((candidate) => (
+                  <button
+                    disabled={busy}
+                    key={candidate.field}
+                    onClick={() => onMaskPower({ field: candidate.field })}
+                    type="button"
+                  >
+                    CUT {candidate.label.toUpperCase()}
+                    <small>
+                      Cancel {candidate.amount}{" "}
+                      {candidate.label.toLowerCase()} · +1 Echo · +1 Static
+                    </small>
+                  </button>
+                ))}
               </div>
             ) : (
               <button
@@ -779,6 +1090,17 @@ export function CommandRail({
               >
                 USE {self.mask.active.title.toUpperCase()}
               </button>
+            )}
+            {self.mask.id === "ember" && phase === "bend" && emberPreview && (
+              <small className="ember-preview">
+                Flame path → space{" "}
+                {String(emberPreview.destination + 1).padStart(2, "0")} ·{" "}
+                {KIND_NAMES[emberPreview.kind]} ·{" "}
+                {emberPreview.kindClass.toUpperCase()} · +2 Static
+                {emberPreview.crossesHearth
+                  ? " · crosses the Hearth (+2 Echoes)"
+                  : ""}
+              </small>
             )}
           </div>
         )}

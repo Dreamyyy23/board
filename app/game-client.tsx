@@ -14,10 +14,22 @@ import {
   createAuthorityCompatibility,
 } from "./authority-compat.mjs";
 import { Board } from "./components/board";
+import { BroadcastNarrator } from "./components/broadcast-narrator";
+import { ChronicleCard } from "./components/chronicle-card";
 import { CommandRail } from "./components/command-rail";
+import { DecisionTray } from "./components/decision-tray";
+import {
+  playCue,
+  primeAudio,
+  setAudioBase,
+  setAudioEnabled,
+  type Cue,
+} from "./table-audio";
 import { MaskPortrait } from "./components/mask-portrait";
 import { SeatRail } from "./components/seat-rail";
+import { StingerOverlay } from "./components/stinger-overlay";
 import { SupportPortal } from "./components/support-portal";
+import { TurnBanner } from "./components/turn-banner";
 import type {
   Intent,
   RoomState,
@@ -26,8 +38,7 @@ import type {
   SpaceClass,
 } from "./game-types";
 
-const SERVER_URL =
-  process.env.NEXT_PUBLIC_GAME_SERVER_URL || "/api/authority";
+const SERVER_URL = process.env.NEXT_PUBLIC_GAME_SERVER_URL || "/api/authority";
 const HTTP_AUTHORITY = SERVER_URL.endsWith("/api/authority");
 const SESSION_KEY = "obscur-sixfold-session";
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/@FoxyAlchemyStudio";
@@ -89,65 +100,15 @@ async function requestAuthority(
   return reply;
 }
 
-function playTone(
-  kind:
-    | "turn"
-    | "roll"
-    | "bend"
-    | "oxygen"
-    | "key"
-    | "error"
-    | "fracture"
-    | "victory",
-) {
-  if (typeof window === "undefined") return;
-  const AudioContextClass =
-    window.AudioContext ||
-    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-      .webkitAudioContext;
-  if (!AudioContextClass) return;
-  const context = new AudioContextClass();
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type =
-    kind === "error" || kind === "fracture"
-      ? "sawtooth"
-      : kind === "key" || kind === "victory"
-        ? "triangle"
-        : "sine";
-  const frequencies = {
-    turn: [246, 329],
-    roll: [164, 392],
-    bend: [330, 218],
-    oxygen: [238, 492],
-    key: [392, 784],
-    error: [92, 58],
-    fracture: [72, 38],
-    victory: [294, 659],
-  } as const;
-  const [start, end] = frequencies[kind];
-  const duration =
-    kind === "fracture" || kind === "victory"
-      ? 0.82
-      : kind === "oxygen" || kind === "key"
-        ? 0.52
-        : 0.36;
-  oscillator.frequency.setValueAtTime(start, context.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(
-    end,
-    context.currentTime + duration * 0.76,
-  );
-  gain.gain.setValueAtTime(0.0001, context.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.11, context.currentTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(
-    0.0001,
-    context.currentTime + duration,
-  );
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + duration + 0.02);
-  oscillator.addEventListener("ended", () => void context.close());
+/**
+ * The old implementation opened a fresh AudioContext for every beep and
+ * never closed one. Browsers allow about six; after that the table went
+ * silent for the rest of the game. Cues now live in `table-audio.ts`,
+ * which shares a single context and can be overridden per cue by a
+ * recorded clip in `public/audio/`.
+ */
+function playTone(kind: Cue) {
+  playCue(kind);
 }
 
 function saveSession(session: Session | null) {
@@ -179,6 +140,7 @@ function EntryScreen({
   onRoomCode,
   onYoutubeChannelUrl,
   onCreate,
+  onCreateLobby,
   onJoin,
 }: {
   connected: boolean;
@@ -193,6 +155,7 @@ function EntryScreen({
   onRoomCode: (value: string) => void;
   onYoutubeChannelUrl: (value: string) => void;
   onCreate: (event: FormEvent) => void;
+  onCreateLobby: (event: FormEvent) => void;
   onJoin: (event: FormEvent) => void;
 }) {
   const legacyCompatibility = authorityMode === "v1";
@@ -210,7 +173,9 @@ function EntryScreen({
           <span>RULESET IV</span>
           <b>{v4Online ? "AUTHORITY ONLINE" : "SEEKING AUTHORITY"}</b>
         </div>
-        <span className="brand-kicker">THE WATCHING TABLE · A FOXYVERSE GAME</span>
+        <span className="brand-kicker">
+          THE WATCHING TABLE · A FOXYVERSE GAME
+        </span>
         <h1>OBSCUR</h1>
         <h2>THE SIXFOLD ROAD</h2>
         <p>
@@ -219,25 +184,57 @@ function EntryScreen({
           receives your oxygen before the House reaches its third Fracture.
         </p>
         <div className="entry-objective" aria-label="Victory condition">
-          <span><b>13</b> Echoes</span>
+          <span>
+            <b>13</b> Echoes
+          </span>
           <i aria-hidden="true" />
-          <span><b>1</b> Alabaster Key</span>
+          <span>
+            <b>1</b> Alabaster Key
+          </span>
           <i aria-hidden="true" />
-          <span><b>1</b> Full Circuit</span>
+          <span>
+            <b>1</b> Full Circuit
+          </span>
         </div>
         <div className="entry-laws">
-          <span><b>01</b> Read · Intent · Cast</span>
-          <span><b>02</b> Server-owned Bend windows</span>
-          <span><b>03</b> Oxygen and Golden Threads</span>
-          <span><b>04</b> Final Orbit before escape</span>
+          <span>
+            <b>01</b> Read · Intent · Cast
+          </span>
+          <span>
+            <b>02</b> Server-owned Bend windows
+          </span>
+          <span>
+            <b>03</b> Oxygen and Golden Threads
+          </span>
+          <span>
+            <b>04</b> Final Orbit before escape
+          </span>
         </div>
         <ol className="entry-cycle" aria-label="Ruleset four turn sequence">
-          <li><b>01</b><span>Read six outcomes</span></li>
-          <li><b>02</b><span>Choose an Intent</span></li>
-          <li><b>03</b><span>Witness the cast</span></li>
-          <li><b>04</b><span>Bend after reveal</span></li>
-          <li><b>05</b><span>Give Oxygen</span></li>
-          <li><b>06</b><span>Survive Final Orbit</span></li>
+          <li>
+            <b>01</b>
+            <span>Read six outcomes</span>
+          </li>
+          <li>
+            <b>02</b>
+            <span>Choose an Intent</span>
+          </li>
+          <li>
+            <b>03</b>
+            <span>Witness the cast</span>
+          </li>
+          <li>
+            <b>04</b>
+            <span>Bend after reveal</span>
+          </li>
+          <li>
+            <b>05</b>
+            <span>Give Oxygen</span>
+          </li>
+          <li>
+            <b>06</b>
+            <span>Survive Final Orbit</span>
+          </li>
         </ol>
       </section>
 
@@ -247,7 +244,9 @@ function EntryScreen({
       >
         <div className="entry-orbit">
           <div className="entry-orbit-runes" aria-hidden="true">
-            {Array.from({ length: 12 }, (_, index) => <i key={index} />)}
+            {Array.from({ length: 12 }, (_, index) => (
+              <i key={index} />
+            ))}
           </div>
           {MASK_PREVIEWS.map(([mask], index) => (
             <article key={mask}>
@@ -274,10 +273,14 @@ function EntryScreen({
         <div className="entry-card-heading">
           <div className="entry-emblem" aria-hidden="true">
             <span>6</span>
-            {Array.from({ length: 6 }, (_, index) => <i key={index} />)}
+            {Array.from({ length: 6 }, (_, index) => (
+              <i key={index} />
+            ))}
           </div>
           <div>
-            <small>{v4Online ? "Ruleset IV · live authority" : "Room signal"}</small>
+            <small>
+              {v4Online ? "Ruleset IV · live authority" : "Room signal"}
+            </small>
             <h3>Take a mask</h3>
           </div>
           <span className={`connection-seal${connected ? " is-online" : ""}`}>
@@ -294,8 +297,8 @@ function EntryScreen({
           <div className="entry-compat-notice" role="status">
             <b>FOXY-ONLY COMPATIBILITY MODE</b>
             <span>
-              Custom creator channels require the next authority release.
-              Tables created here use the current Foxy Alchemy catalog.
+              Custom creator channels require the next authority release. Tables
+              created here use the current Foxy Alchemy catalog.
             </span>
           </div>
         ) : null}
@@ -310,64 +313,94 @@ function EntryScreen({
               autoComplete="nickname"
             />
           </label>
-          <fieldset
-            className={`channel-terminal${legacyCompatibility ? " is-compat-locked" : ""}`}
-            disabled={legacyCompatibility}
+          <button
+            className="entry-primary"
+            disabled={!connected || busy}
+            type="submit"
           >
-            <legend>
-              <span>Channel bound to this room</span>
-              <small>Resolved once, drawn by the authority on every landing</small>
-            </legend>
-            <div className="channel-presets">
-              {CREATOR_CHANNELS.map((channel) => {
-                const selected = youtubeChannelUrl === channel.url;
-                return (
-                  <button
-                    aria-pressed={selected}
-                    className={`channel-preset channel-preset--${channel.id}${selected ? " is-selected" : ""}`}
-                    key={channel.id}
-                    onClick={() => onYoutubeChannelUrl(channel.url)}
-                    type="button"
-                  >
-                    <i aria-hidden="true" />
-                    <span>
-                      <b>{channel.name}</b>
-                      <small>{channel.handle}</small>
-                    </span>
-                    <em>{channel.motif}</em>
-                  </button>
-                );
-              })}
-            </div>
-            <label className="channel-url-field">
-              <span>YouTube channel URL</span>
-              <input
-                inputMode="url"
-                onChange={(event) => onYoutubeChannelUrl(event.target.value)}
-                placeholder="https://www.youtube.com/@yourchannel"
-                required
-                type="url"
-                value={youtubeChannelUrl}
-              />
-            </label>
-          </fieldset>
-          <button className="entry-primary" disabled={!connected || busy} type="submit">
             <b aria-hidden="true">◆</b>
             <span>
               {legacyCompatibility
                 ? "Create Foxy compatibility table"
-                : "Open a Ruleset IV table"}
+                : "Quick Table — cross now"}
               <small>
                 {legacyCompatibility
                   ? "Every landing stages one authority-selected Foxy transmission"
-                  : "Six seats · 61-second authority · Witness · Oxygen · Fractures · Final Orbit"}
+                  : "Starts instantly · you + three rival Echoes · Witness their turns, Bend your own"}
               </small>
             </span>
             <i aria-hidden="true">→</i>
           </button>
+
+          <details className="channel-advanced">
+            <summary>
+              <b>Advanced · bind a creator channel</b>
+              <small>
+                {youtubeChannelUrl === DEFAULT_CHANNEL_URL
+                  ? "Currently the Foxy Alchemy default"
+                  : "Custom channel selected"}
+              </small>
+            </summary>
+            <fieldset
+              className={`channel-terminal${legacyCompatibility ? " is-compat-locked" : ""}`}
+              disabled={legacyCompatibility}
+            >
+              <legend>
+                <span>Channel bound to this room</span>
+                <small>
+                  Resolved once, drawn by the authority on every landing
+                </small>
+              </legend>
+              <div className="channel-presets">
+                {CREATOR_CHANNELS.map((channel) => {
+                  const selected = youtubeChannelUrl === channel.url;
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={`channel-preset channel-preset--${channel.id}${selected ? " is-selected" : ""}`}
+                      key={channel.id}
+                      onClick={() => onYoutubeChannelUrl(channel.url)}
+                      type="button"
+                    >
+                      <i aria-hidden="true" />
+                      <span>
+                        <b>{channel.name}</b>
+                        <small>{channel.handle}</small>
+                      </span>
+                      <em>{channel.motif}</em>
+                    </button>
+                  );
+                })}
+              </div>
+              <label className="channel-url-field">
+                <span>YouTube channel URL</span>
+                <input
+                  inputMode="url"
+                  onChange={(event) => onYoutubeChannelUrl(event.target.value)}
+                  placeholder="https://www.youtube.com/@yourchannel"
+                  type="url"
+                  value={youtubeChannelUrl}
+                />
+              </label>
+            </fieldset>
+            <button
+              className="entry-lobby-button"
+              disabled={!connected || busy}
+              onClick={onCreateLobby}
+              type="button"
+            >
+              <b>Host a lobby instead</b>
+              <small>
+                Open a table with a shareable code, seat friends and Echoes
+                yourself, begin when ready.
+              </small>
+            </button>
+          </details>
         </form>
 
-        <div className="entry-divider"><span>or answer an existing signal</span></div>
+        <div className="entry-divider">
+          <span>or answer an existing signal</span>
+        </div>
 
         <form className="join-form" onSubmit={onJoin}>
           <label>
@@ -385,12 +418,19 @@ function EntryScreen({
               autoComplete="off"
             />
           </label>
-          <button disabled={!connected || busy || roomCode.length !== 5} type="submit">
+          <button
+            disabled={!connected || busy || roomCode.length !== 5}
+            type="submit"
+          >
             Join
           </button>
         </form>
 
-        {error && <p className="entry-error" role="status">{error}</p>}
+        {error && (
+          <p className="entry-error" role="status">
+            {error}
+          </p>
+        )}
         <p className="entry-privacy">
           The receiver attempts each authority-selected transmission
           immediately. If the browser requires a gesture, one start control
@@ -506,37 +546,58 @@ function RulesModal({
           <article>
             <span>TURN</span>
             <h3>Read, intend, cast</h3>
-            <p>Read six broad destination classes, choose CLAIM, SHELTER, or BIND, then let the authority cast.</p>
+            <p>
+              Read six broad destination classes, choose CLAIM, SHELTER, or
+              BIND, then let the authority cast.
+            </p>
           </article>
           <article>
             <span>FOCUS</span>
             <h3>Bend after the cast</h3>
-            <p>See the natural result first. Spend one Focus during the five-second Bend window to move one edge.</p>
+            <p>
+              See the natural result first. Spend one Focus during the
+              five-second Bend window to move one edge.
+            </p>
           </article>
           <article>
             <span>RESOLVE</span>
             <h3>Give Oxygen</h3>
-            <p>A helper may pay Resolve, then Echo, to prevent harm and form a visible Golden Thread.</p>
+            <p>
+              A helper may pay Resolve, then Echo, to prevent harm and form a
+              visible Golden Thread.
+            </p>
           </article>
           <article>
             <span>STATIC</span>
             <h3>Shared pressure</h3>
-            <p>At twelve, Static Fractures, installs one round law, and resets. The third Fracture gives the House victory.</p>
+            <p>
+              At twelve, Static Fractures, installs one round law, and resets.
+              The third Fracture gives the House victory.
+            </p>
           </article>
           <article>
             <span>VOWS</span>
             <h3>Chosen behavior</h3>
-            <p>Vows are public and behavioral. Completion grants three Echoes, one Focus, and recharges the active.</p>
+            <p>
+              Vows are public and behavioral. Completion grants three Echoes,
+              one Focus, and recharges the active.
+            </p>
           </article>
           <article>
             <span>COUNCIL</span>
             <h3>Hidden stones</h3>
-            <p>The table shows who voted, never how, until stones reveal one by one in seat order.</p>
+            <p>
+              The table shows who voted, never how, until stones reveal one by
+              one in seat order.
+            </p>
           </article>
           <article>
             <span>TRANSMISSION</span>
             <h3>Every landing leaves an Omen</h3>
-            <p>The accepted upload deterministically names an Omen for the next ordinary turn. Rejected embeds fail forward.</p>
+            <p>
+              The accepted upload deterministically names an Omen for the next
+              ordinary turn. Rejected embeds fail forward.
+            </p>
           </article>
         </div>
 
@@ -547,7 +608,9 @@ function RulesModal({
               <article key={mask.id}>
                 <MaskPortrait seat={index} small />
                 <div>
-                  <strong>{mask.name} · {mask.title}</strong>
+                  <strong>
+                    {mask.name} · {mask.title}
+                  </strong>
                   <p>{mask.passive}</p>
                   {mask.active && (
                     <small>
@@ -583,14 +646,41 @@ export function GameClient() {
   const [session, setSession] = useState<Session | null>(null);
   const [name, setName] = useState("Wanderer");
   const [roomCode, setRoomCode] = useState("");
-  const [youtubeChannelUrl, setYoutubeChannelUrl] = useState(
-    DEFAULT_CHANNEL_URL,
-  );
+  const [youtubeChannelUrl, setYoutubeChannelUrl] =
+    useState(DEFAULT_CHANNEL_URL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sound, setSound] = useState(true);
+
+  // The audio engine needs the same asset base the stylesheet uses, and it
+  // needs a real user gesture before a browser will let it make a noise.
+  useEffect(() => {
+    const probe = document.createElement("div");
+    probe.className = "asset-base-probe";
+    document.body.appendChild(probe);
+    const raw = getComputedStyle(probe).backgroundImage;
+    probe.remove();
+    const found = /url\(["']?(.*?)["']?\)/.exec(raw || "");
+    if (found?.[1]) {
+      setAudioBase(
+        new URL(found[1], document.baseURI).pathname.replace(/\/[^/]*$/, ""),
+      );
+    }
+    const unlock = () => primeAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
+    setAudioEnabled(sound);
+  }, [sound]);
   const [helpOpen, setHelpOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [previewIntent, setPreviewIntent] = useState<Intent | null>(null);
   const [broadcastMode] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -653,9 +743,9 @@ export function GameClient() {
             ? "join_room"
             : joiningDeepLink
               ? "join_room"
-            : saved
-              ? "get_state"
-              : "health";
+              : saved
+                ? "get_state"
+                : "health";
         firstRequest = false;
         try {
           const reply = await requestAuthority(
@@ -671,7 +761,7 @@ export function GameClient() {
                     code: deepLinkCode,
                     name: deepLinkName,
                   }
-              : {},
+                : {},
           );
           if (stopped) return;
           if (!reply.ok) {
@@ -758,7 +848,9 @@ export function GameClient() {
     nextSocket.on("disconnect", () => setConnected(false));
     nextSocket.on("connect_error", () => {
       setConnected(false);
-      setError("The room authority is offline. Reconnection will continue automatically.");
+      setError(
+        "The room authority is offline. Reconnection will continue automatically.",
+      );
     });
     nextSocket.on("room_state", (state: RoomState) =>
       receiveRoomState(state, "sixfold-road-v4"),
@@ -774,17 +866,14 @@ export function GameClient() {
       room?.players.find((player) => player?.id === session?.playerId) || null,
     [room, session],
   );
-  const isHost = Boolean(
-    self &&
-      room &&
-      self.seat === room.keeperSeat,
-  );
+  const isHost = Boolean(self && room && self.seat === room.keeperSeat);
 
   useEffect(() => {
     if (!room?.lastRoll || !sound) return;
     if (Number(room.rulesVersion || 0) >= 4) return;
     const rollKey = `${room.turnNumber}-${room.lastRoll.seat}-${room.lastRoll.die}`;
-    if (lastRollRef.current && lastRollRef.current !== rollKey) playTone("roll");
+    if (lastRollRef.current && lastRollRef.current !== rollKey)
+      playTone("cast");
     lastRollRef.current = rollKey;
   }, [room?.lastRoll, room?.rulesVersion, room?.turnNumber, sound]);
 
@@ -792,7 +881,7 @@ export function GameClient() {
     if (!room?.turn?.naturalRoll || !sound) return;
     const rollKey = `${room.turn.id}-${room.turn.naturalRoll}`;
     if (naturalRollRef.current && naturalRollRef.current !== rollKey) {
-      playTone("roll");
+      playTone("cast");
     }
     naturalRollRef.current = rollKey;
   }, [room?.turn?.id, room?.turn?.naturalRoll, sound]);
@@ -862,20 +951,63 @@ export function GameClient() {
     setError("");
   }
 
-  function createRoom(event: FormEvent) {
+  /** Quick Table: create the room and start a four-mask crossing (host +
+   * three Echoes) in one motion — no lobby stop, no manual bot seating.
+   * The authority fills the seats server-side via start_game{quickFill}. */
+  function quickStart(reply: ServerReply, entryName: string) {
+    finishEntry(reply, entryName);
+    if (!reply.ok || !reply.code || !reply.token || reply.spectator) return;
+    const startPayload = {
+      quickFill: true,
+      seats: 4,
+      commandId: nextCommandId("start_game"),
+    };
+    setBusy(true);
+    if (HTTP_AUTHORITY) {
+      void requestAuthority("start_game", {
+        code: reply.code,
+        token: reply.token,
+        ...startPayload,
+      })
+        .then((startReply) => {
+          setBusy(false);
+          if (startReply.state) {
+            receiveRoomState(startReply.state, startReply.protocol);
+          }
+        })
+        .catch(() => setBusy(false));
+      return;
+    }
+    const socket = socketRef.current;
+    if (!socket) return;
+    socket.emit(
+      "start_game",
+      { code: reply.code, token: reply.token, ...startPayload },
+      (startReply: ServerReply) => {
+        setBusy(false);
+        if (startReply?.state) {
+          receiveRoomState(startReply.state, startReply.protocol);
+        }
+      },
+    );
+  }
+
+  function createRoom(event: FormEvent, mode: "quick" | "lobby" = "quick") {
     event.preventDefault();
     if (!connected) {
       setError("The room authority has not connected yet.");
       return;
     }
     const entryName = name.trim() || "Wanderer";
+    const onReady =
+      mode === "quick" && authorityMode !== "v1" ? quickStart : finishEntry;
     setBusy(true);
     if (HTTP_AUTHORITY) {
       void requestAuthority("create_room", {
         name: entryName,
         youtubeChannelUrl,
       })
-        .then((reply) => finishEntry(reply, entryName))
+        .then((reply) => onReady(reply, entryName))
         .catch(() => {
           setBusy(false);
           setConnected(false);
@@ -888,7 +1020,7 @@ export function GameClient() {
     socket.emit(
       "create_room",
       { name: entryName, youtubeChannelUrl },
-      (reply: ServerReply) => finishEntry(reply, entryName),
+      (reply: ServerReply) => onReady(reply, entryName),
     );
   }
 
@@ -938,8 +1070,17 @@ export function GameClient() {
         .then((reply) => {
           setBusy(false);
           if (!reply.ok) {
-            setError(reply.error || "The table refused the move.");
-            if (sound) playTone("error");
+            // Contention losers still receive the fresh truth: apply it so
+            // the table snaps to the real state instead of drifting.
+            if (reply.state) receiveRoomState(reply.state, reply.protocol);
+            if (reply.alreadyResolved) {
+              setError(
+                reply.error || "Another traveler already resolved that.",
+              );
+            } else {
+              setError(reply.error || "The table refused the move.");
+              if (sound) playTone("error");
+            }
           } else {
             if (reply.state) receiveRoomState(reply.state, reply.protocol);
             setError("");
@@ -948,7 +1089,9 @@ export function GameClient() {
         .catch(() => {
           setBusy(false);
           setConnected(false);
-          setError("The room authority is offline. Reconnection will continue.");
+          setError(
+            "The room authority is offline. Reconnection will continue.",
+          );
         });
       return;
     }
@@ -1005,14 +1148,10 @@ export function GameClient() {
       return { ok: false, error: "The room authority is offline." };
     }
     return new Promise((resolve) => {
-      socket.emit(
-        "reject_transmission",
-        payload,
-        (reply: ServerReply) => {
-          if (reply.state) receiveRoomState(reply.state, reply.protocol);
-          resolve({ ok: reply.ok, error: reply.error });
-        },
-      );
+      socket.emit("reject_transmission", payload, (reply: ServerReply) => {
+        if (reply.state) receiveRoomState(reply.state, reply.protocol);
+        resolve({ ok: reply.ok, error: reply.error });
+      });
     });
   }
 
@@ -1038,7 +1177,8 @@ export function GameClient() {
   async function copyCode() {
     if (!room) return;
     try {
-      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      if (!navigator.clipboard?.writeText)
+        throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(room.code);
       setError("Room code copied. The signal can be shared.");
     } catch {
@@ -1076,11 +1216,10 @@ export function GameClient() {
           onRoomCode={setRoomCode}
           onYoutubeChannelUrl={setYoutubeChannelUrl}
           onCreate={createRoom}
+          onCreateLobby={(event: FormEvent) => createRoom(event, "lobby")}
           onJoin={joinRoom}
         />
-        {supportOpen && (
-          <SupportPortal onClose={closeSupport} />
-        )}
+        {supportOpen && <SupportPortal onClose={closeSupport} />}
       </>
     );
   }
@@ -1090,11 +1229,11 @@ export function GameClient() {
   const v4 = authorityMode === "v4" || Number(room.rulesVersion || 0) >= 4;
   const canRoll = Boolean(
     self &&
-      room.status === "playing" &&
-      room.currentSeat === self.seat &&
-      (v4
-        ? room.phase === "intent" && room.turn?.intent
-        : !room.pendingChoice && !room.pendingCouncil),
+    room.status === "playing" &&
+    room.currentSeat === self.seat &&
+    (v4
+      ? room.phase === "intent" && room.turn?.intent
+      : !room.pendingChoice && !room.pendingCouncil),
   );
   const latestAnnouncement =
     room.recentEvents?.at(-1)?.summary ||
@@ -1113,7 +1252,9 @@ export function GameClient() {
       data-active-seat={room.currentSeat ?? "none"}
       data-phase={room.phase || room.status}
       data-presentation={
-        room.presentationState || room.lastEvent?.presentationState || room.phase
+        room.presentationState ||
+        room.lastEvent?.presentationState ||
+        room.phase
       }
       data-self-active={self?.seat === room.currentSeat ? "true" : "false"}
     >
@@ -1125,7 +1266,9 @@ export function GameClient() {
           <div className="mini-emblem">6</div>
           <div>
             <span>Foxyverse real-time table</span>
-            <strong>OBSCUR <i>/</i> THE SIXFOLD ROAD</strong>
+            <strong>
+              OBSCUR <i>/</i> THE SIXFOLD ROAD
+            </strong>
           </div>
         </div>
 
@@ -1145,11 +1288,15 @@ export function GameClient() {
         <div className="signal-console">
           <div className="signal-copy">
             <span>Shared Static</span>
-            <b>{room.signal}/{room.signalMax}</b>
+            <b>
+              {room.signal}/{room.signalMax}
+            </b>
           </div>
           <div className="signal-meter">
             <i style={{ width: `${signalPercent}%` }} />
-            {Array.from({ length: 12 }, (_, index) => <span key={index} />)}
+            {Array.from({ length: 12 }, (_, index) => (
+              <span key={index} />
+            ))}
           </div>
           <small>
             {signalDanger
@@ -1159,7 +1306,9 @@ export function GameClient() {
         </div>
 
         <nav className="header-actions" aria-label="Game options">
-          <button onClick={() => setHelpOpen(true)} type="button">Codex</button>
+          <button onClick={() => setHelpOpen(true)} type="button">
+            Codex
+          </button>
           <button
             aria-label="Support the table with Ethereum"
             className="support-nav-button"
@@ -1176,7 +1325,9 @@ export function GameClient() {
           >
             {sound ? "Sound on" : "Sound off"}
           </button>
-          <button onClick={leaveTable} type="button">Leave</button>
+          <button onClick={leaveTable} type="button">
+            Leave
+          </button>
         </nav>
       </header>
 
@@ -1200,7 +1351,9 @@ export function GameClient() {
             STATIC {room.signal}/{room.signalMax} · FRACTURES{" "}
             {room.fractures || 0}/3
           </span>
-          <span>OMEN {(room.omen || room.nextOmen || "NONE").toUpperCase()}</span>
+          <span>
+            OMEN {(room.omen || room.nextOmen || "NONE").toUpperCase()}
+          </span>
           <span>
             {room.endgame?.mode === "normal"
               ? `HARD END IN ${Math.max(0, 12 - room.round)} ROUNDS`
@@ -1208,6 +1361,8 @@ export function GameClient() {
           </span>
         </section>
       )}
+
+      {broadcastMode && <BroadcastNarrator room={room} />}
 
       <div className="game-layout">
         <SeatRail
@@ -1222,7 +1377,40 @@ export function GameClient() {
           self={self}
           canRoll={canRoll}
           busy={busy}
+          previewIntent={previewIntent}
           onRoll={() => emitAction(v4 ? "cast" : "roll")}
+          decision={
+            broadcastMode ? null : (
+              <DecisionTray
+                room={room}
+                self={self}
+                busy={busy}
+                onIntent={(intent: Intent, targetSeat?: number) =>
+                  emitAction("select_intent", { intent, targetSeat })
+                }
+                onCast={() => emitAction(v4 ? "cast" : "roll")}
+                onBend={(delta, useAshEvent) =>
+                  emitAction("bend", { delta, useAshEvent })
+                }
+                onPrediction={(prediction: SpaceClass, bold?: boolean) =>
+                  emitAction("submit_prediction", { prediction, bold })
+                }
+                onGiveOxygen={() => emitAction("give_oxygen")}
+                onMaskPower={(payload = {}) =>
+                  emitAction("use_mask_power", payload)
+                }
+                onUseRelic={(relicId, extra = {}) =>
+                  emitAction("use_relic", { relicId, ...extra })
+                }
+                onChoice={(choiceId) =>
+                  emitAction("answer_choice", { choiceId })
+                }
+                onCouncilVote={(choiceId) =>
+                  emitAction("vote_council", { choiceId })
+                }
+              />
+            )
+          }
         />
         <CommandRail
           room={room}
@@ -1233,11 +1421,14 @@ export function GameClient() {
           onChoice={(choiceId) => emitAction("answer_choice", { choiceId })}
           onCouncilVote={(choiceId) => emitAction("vote_council", { choiceId })}
           onGift={(targetSeat) => emitAction("gift_echo", { targetSeat })}
-          onIntent={(intent: Intent, targetSeat?: number) =>
-            emitAction("select_intent", { intent, targetSeat })
-          }
-          onPrediction={(prediction: SpaceClass) =>
-            emitAction("submit_prediction", { prediction })
+          onIntent={(intent: Intent, targetSeat?: number) => {
+            setPreviewIntent(null);
+            emitAction("select_intent", { intent, targetSeat });
+          }}
+          onCast={() => emitAction(v4 ? "cast" : "roll")}
+          onPreviewIntent={setPreviewIntent}
+          onPrediction={(prediction: SpaceClass, bold?: boolean) =>
+            emitAction("submit_prediction", { prediction, bold })
           }
           onBend={(delta, useAshEvent) =>
             emitAction("bend", { delta, useAshEvent })
@@ -1252,9 +1443,24 @@ export function GameClient() {
             authorityMode === "v1" ? undefined : rerouteTransmission
           }
           onStart={() => emitAction("start_game")}
-          onUseRelic={(relicId) => emitAction("use_relic", { relicId })}
+          onUseRelic={(relicId, extra = {}) =>
+            emitAction("use_relic", { relicId, ...extra })
+          }
         />
       </div>
+
+      {room.status === "finished" && (
+        <ChronicleCard
+          room={room}
+          self={self}
+          isHost={isHost}
+          busy={busy}
+          onRematch={() => emitAction("start_game")}
+        />
+      )}
+
+      {!broadcastMode && <TurnBanner room={room} />}
+      {!broadcastMode && <StingerOverlay room={room} />}
 
       <footer className="game-footer">
         <span>
@@ -1277,16 +1483,20 @@ export function GameClient() {
       </footer>
 
       {error && (
-        <button className="table-toast" onClick={() => setError("")} type="button">
+        <button
+          className="table-toast"
+          onClick={() => setError("")}
+          type="button"
+        >
           <span>TABLE NOTICE</span>
           {error}
         </button>
       )}
 
-      {helpOpen && <RulesModal room={room} onClose={() => setHelpOpen(false)} />}
-      {supportOpen && (
-        <SupportPortal onClose={closeSupport} />
+      {helpOpen && (
+        <RulesModal room={room} onClose={() => setHelpOpen(false)} />
       )}
+      {supportOpen && <SupportPortal onClose={closeSupport} />}
     </main>
   );
 }

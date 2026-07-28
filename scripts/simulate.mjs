@@ -205,7 +205,9 @@ function intentFor(room, player, controller) {
 
 function bendFor(room, player, controller) {
   if (!isHeuristic(controller)) return 0;
-  const candidates = [-1, 0, 1]
+  // Delta 0 first: edge-clamped duplicates dedupe away instead of surviving
+  // as paid no-ops, which the authority now rejects outright.
+  const candidates = [0, -1, 1]
     .map((delta) => ({
       delta,
       roll: Math.max(1, Math.min(6, room.turn.naturalRoll + delta)),
@@ -520,27 +522,42 @@ function driveStep(room, profile, now, metrics) {
           (isHeuristic(controllerFor(profile, right.seat)) ? 3 : 0);
         return rightScore - leftScore || left.seat - right.seat;
       });
-    const helper = helpers.find(
+    let helper = helpers.find(
       (candidate) =>
         controllerFor(profile, candidate.seat) !== "timeout" &&
         candidate.oxygenUsedRound !== room.round &&
         (candidate.resolve > 0 || candidate.echoes > 0),
     );
+    // The authority now grants the BIND target exclusive first claim. The
+    // bound traveler answers inside the window when able; otherwise the
+    // table waits the window out before anyone else may act.
+    let actionNow = now;
+    if (reaction.priority && helper && helper.seat !== reaction.priority.seat) {
+      const bound = helpers.find(
+        (candidate) =>
+          candidate.seat === reaction.priority.seat &&
+          controllerFor(profile, candidate.seat) !== "timeout" &&
+          candidate.oxygenUsedRound !== room.round &&
+          (candidate.resolve > 0 || candidate.echoes > 0),
+      );
+      if (bound) helper = bound;
+      else actionNow = Math.max(now, reaction.priority.until + 1);
+    }
     if (helper && harm >= 1) {
       metrics.oxygenAttempts += 1;
       if (helper.mask.id === "moss" && helper.maskCharge) {
-        activateMaskPower(room, helper.token, {}, { now });
+        activateMaskPower(room, helper.token, {}, { now: actionNow });
         metrics.powerUses += 1;
       } else if (helper.mask.id === "veil" && helper.maskCharge) {
-        activateMaskPower(room, helper.token, {}, { now });
+        activateMaskPower(room, helper.token, {}, { now: actionNow });
         metrics.powerUses += 1;
       } else {
-        giveOxygen(room, helper.token, { now });
+        giveOxygen(room, helper.token, { now: actionNow });
       }
     } else {
       resolveReaction(room, now);
     }
-    return now;
+    return actionNow;
   }
 
   if (room.phase === "oracle") {

@@ -64,9 +64,11 @@ test("responsive and broadcast layouts keep a reduced-motion path", async () => 
 test("adaptive audio reacts to the decisive v4 event families", async () => {
   const client = await read("../app/game-client.tsx");
 
+  // "roll" became "cast" when the cues were rebuilt around what the table
+  // physically does rather than what the command was called.
   for (const cue of [
     'playTone("turn")',
-    'playTone("roll")',
+    'playTone("cast")',
     'playTone("bend")',
     'playTone("oxygen")',
     'playTone("key")',
@@ -75,6 +77,20 @@ test("adaptive audio reacts to the decisive v4 event families", async () => {
   ]) {
     assert.match(client, new RegExp(cue.replace(/[()"]/g, "\\$&")));
   }
+});
+
+test("the audio engine shares one context and can be overridden per cue", async () => {
+  const engine = await read("../app/table-audio.ts");
+
+  // The bug this guards: a fresh AudioContext per cue silently kills sound
+  // partway through a game, because browsers cap live contexts at about six.
+  assert.match(engine, /let context: AudioContext \| null = null;/);
+  assert.equal((engine.match(/new AudioContextClass\(/g) || []).length, 1);
+  // A suspended context is indistinguishable from broken audio unless it
+  // is resumed on the way back in.
+  assert.match(engine, /state === "suspended"/);
+  // Recorded clips have to be able to replace any single cue.
+  assert.match(engine, /\/audio\/\$\{cue\}\.webm/);
 });
 
 test("social metadata is wired into both render targets", async () => {

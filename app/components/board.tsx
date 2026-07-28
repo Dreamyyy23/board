@@ -1,5 +1,14 @@
-import { BOARD_POINTS, KIND_MARKS, KIND_NAMES, SPACE_KINDS } from "../game-data";
+import { useCallback, useState } from "react";
+import {
+  BOARD_POINTS,
+  KIND_MARKS,
+  KIND_NAMES,
+  SPACE_KINDS,
+} from "../game-data";
+import { Table3D, type ViewControls } from "./table-3d";
+import { playCue } from "../table-audio";
 import type {
+  Intent,
   Player,
   ReachableDestination,
   RoomState,
@@ -124,13 +133,18 @@ export function Board({
   self,
   canRoll,
   busy,
+  previewIntent = null,
   onRoll,
+  decision = null,
 }: {
   room: RoomState;
   self: Player | null;
   canRoll: boolean;
   busy: boolean;
+  previewIntent?: Intent | null;
   onRoll: () => void;
+  /** The live decision surface, rendered onto the table itself. */
+  decision?: React.ReactNode;
 }) {
   const activePlayer =
     room.currentSeat === null ? null : room.players[room.currentSeat];
@@ -145,9 +159,8 @@ export function Board({
         to: room.players[Number(targetSeat)],
         strength,
       }))
-      .filter(
-        (link): link is { from: Player; to: Player; strength: number } =>
-          Boolean(link.to && link.from.seat < link.to.seat && link.strength > 0),
+      .filter((link): link is { from: Player; to: Player; strength: number } =>
+        Boolean(link.to && link.from.seat < link.to.seat && link.strength > 0),
       );
   });
   const natural = room.turn?.naturalRoll ?? room.lastRoll?.naturalDie ?? null;
@@ -157,8 +170,8 @@ export function Board({
     reachable.map((destination) => [destination.destination, destination]),
   );
   const occupiedPositions = new Map<number, Player[]>();
-  for (const player of room.players.filter(
-    (candidate): candidate is Player => Boolean(candidate),
+  for (const player of room.players.filter((candidate): candidate is Player =>
+    Boolean(candidate),
   )) {
     const group = occupiedPositions.get(player.position) || [];
     group.push(player);
@@ -170,11 +183,33 @@ export function Board({
   );
   const presentation =
     room.presentationState || room.lastEvent?.presentationState || phase;
+  // An Intent held under the pointer (or already locked) annotates the six
+  // roads with its truthful class-level consequence from the authority.
+  const annotatedIntent =
+    previewIntent || (phase === "intent" ? room.turn?.intent || null : null);
+  const annotations = annotatedIntent
+    ? room.turn?.intentPreviews?.annotations?.[annotatedIntent] || null
+    : null;
+  // The carved 3D table takes over as the play surface once WebGL confirms
+  // it is running; until then (and on reduced motion) the flat road stands.
+  const [dimensional, setDimensional] = useState(false);
+  // Turning the table is a mouse gesture on the canvas, but it also has to
+  // be reachable from three real buttons, or it is a feature only some
+  // people have.
+  const [view, setView] = useState<ViewControls | null>(null);
+  const nudgeView = useCallback(
+    (yaw: number, pitch = 0) => {
+      view?.orbitBy(yaw, pitch);
+      playCue("view");
+    },
+    [view],
+  );
 
   return (
     <section
       aria-label="The Sixfold Road board"
-      className={`board-panel board-phase--${phase}`}
+      className={`board-panel board-phase--${phase}${dimensional ? " has-3d" : ""}`}
+      data-endgame={room.endgame?.mode || "normal"}
       data-event-tone={room.lastEvent?.tone || "quiet"}
       data-omen={room.omen || "none"}
       data-phase={phase}
@@ -188,6 +223,19 @@ export function Board({
     >
       <div className="board-table-image" />
       <div className="board-atmosphere" />
+      <Table3D onReady={setDimensional} onView={setView} room={room} />
+      {/* Presentation art: painted stingers for Fracture, Final Orbit, and
+          the two endings. Pure decoration behind live state — the table
+          remains complete when the images are absent. */}
+      <div aria-hidden="true" className="board-scene-art" />
+      <div aria-hidden="true" className="board-scene-embers">
+        {Array.from({ length: 14 }, (_, index) => (
+          <i
+            key={index}
+            style={{ "--ember-index": index } as React.CSSProperties}
+          />
+        ))}
+      </div>
       <div className="table-candle-glow table-candle-glow--left" />
       <div className="table-candle-glow table-candle-glow--right" />
       <div
@@ -222,41 +270,50 @@ export function Board({
           <span>{PHASE_LABELS[phase] || phase}</span>
         </div>
         <b aria-label={`${room.secondsLeft ?? 61} seconds remaining`}>
-          {room.status === "playing" ? room.secondsLeft ?? 61 : "—"}
+          {room.status === "playing" ? (room.secondsLeft ?? 61) : "—"}
           <small>SEC</small>
         </b>
       </div>
 
-      {self && (
-        <div className="journey-plaque">
-          <small>Your crossing</small>
-          <div>
-            <span>
-              <b>{self.echoes}</b> / {room.objective.echoes}
-              <i>Echoes</i>
-            </span>
-            <span>
-              <b>{self.keys}</b> / {room.objective.keys}
-              <i>Key</i>
-            </span>
-            <span>
-              <b>{self.laps}</b> / {room.objective.laps}
-              <i>Circuit</i>
-            </span>
+      <div className="board-side-stack">
+        {self && (
+          <div className="journey-plaque">
+            <small>Your crossing</small>
+            <div>
+              <span>
+                <b>{self.echoes}</b> / {room.objective.echoes}
+                <i>Echoes</i>
+              </span>
+              <span>
+                <b>{self.keys}</b> / {room.objective.keys}
+                <i>Key</i>
+              </span>
+              <span>
+                <b>{self.laps}</b> / {room.objective.laps}
+                <i>Circuit</i>
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="omen-plaque" data-omen={room.omen || "none"}>
-        <small>Current Omen</small>
-        <strong>{room.omen ? room.omen.toUpperCase() : "NO OMEN"}</strong>
-        <span>
-          {room.omen
-            ? "Applies to this ordinary turn, then is consumed."
-            : room.nextOmen
-              ? `${room.nextOmen.toUpperCase()} waits in the latest transmission.`
-              : "The next accepted transmission will name one."}
-        </span>
+        <div className="omen-plaque" data-omen={room.omen || "none"}>
+          {room.omen && (
+            <i
+              aria-hidden="true"
+              className="omen-sigil"
+              data-omen={room.omen}
+            />
+          )}
+          <small>Current Omen</small>
+          <strong>{room.omen ? room.omen.toUpperCase() : "NO OMEN"}</strong>
+          <span>
+            {room.omen
+              ? "Applies to this ordinary turn, then is consumed."
+              : room.nextOmen
+                ? `${room.nextOmen.toUpperCase()} waits in the latest transmission.`
+                : "The next accepted transmission will name one."}
+          </span>
+        </div>
       </div>
 
       <div className="north-mark" aria-hidden="true">
@@ -407,7 +464,9 @@ export function Board({
         </div>
 
         <button
-          aria-label={canRoll ? "Cast the bone" : "The ritual heart of the board"}
+          aria-label={
+            canRoll ? "Cast the bone" : "The ritual heart of the board"
+          }
           className={`board-heart${canRoll ? " is-actionable" : ""}`}
           disabled={!canRoll || busy}
           onClick={canRoll ? onRoll : undefined}
@@ -434,19 +493,51 @@ export function Board({
                     ? `FINAL CAST · ${final}`
                     : "THE BONE WAITS"}
           </small>
-          <strong>{canRoll ? "CAST THE BONE" : "OBSCUR"}</strong>
+          {/* The heart reports the table's live state. The wordmark lives in
+              the header — repeating it over the play surface only competed
+              with the die it is supposed to frame. */}
+          <strong>
+            {canRoll
+              ? "CAST THE BONE"
+              : phase === "bend" && natural
+                ? "BEND OR ACCEPT"
+                : phase === "reaction"
+                  ? "OXYGEN WINDOW"
+                  : phase === "oracle"
+                    ? "THE ORACLE ASKS"
+                    : phase === "council-vote"
+                      ? "THE COUNCIL SITS"
+                      : phase === "fracture"
+                        ? "THE TABLE BREAKS"
+                        : phase === "intent" && activePlayer?.id === self?.id
+                          ? "YOUR ROAD · CHOOSE AN INTENT"
+                          : activePlayer && phase === "intent"
+                            ? `${activePlayer.sigil} READS THE ROAD`
+                            : final
+                              ? `THE ROAD ANSWERED ${final}`
+                              : "THE BONE WAITS"}
+          </strong>
           <span>
             {natural && final && natural !== final
               ? `Natural ${natural} → final ${final}`
-              : "Server-owned result · visible Bend"}
+              : activePlayer && !canRoll
+                ? `${activePlayer.name} holds the authority`
+                : "Server-owned result · visible Bend"}
           </span>
         </button>
       </div>
 
-      <div className="road-ahead road-ahead--six">
+      <div
+        className={`road-ahead road-ahead--six${annotations ? " has-intent-annotations" : ""}`}
+        data-annotated-intent={annotatedIntent || undefined}
+      >
         <div>
           <small>Read the Road</small>
-          <strong>Six reachable destinations · events remain hidden</strong>
+          <strong>
+            {annotatedIntent
+              ? `${annotatedIntent.toUpperCase()} written over the six roads`
+              : "Six reachable destinations · events remain hidden"}
+          </strong>
         </div>
         <ol>
           {reachable.map((destination) => (
@@ -472,27 +563,38 @@ export function Board({
                 <small>{CLASS_LABELS[destination.class]}</small>
                 <b>{KIND_NAMES[destination.kind] || destination.kind}</b>
               </div>
-              {room.turn?.revealedEvents?.[destination.roll] && (
+              {room.turn?.revealedEvents?.[destination.roll] ? (
                 <em title={room.turn.revealedEvents[destination.roll].body}>
                   {room.turn.revealedEvents[destination.roll].title}
                 </em>
-              )}
+              ) : annotations ? (
+                <em className="road-annotation">
+                  {annotations[destination.class]}
+                </em>
+              ) : null}
             </li>
           ))}
         </ol>
       </div>
 
       <div className="board-legend">
-        {["echo", "relic", "archive", "council", "oracle", "key", "rift", "snare"].map(
-          (kind) => (
-            <span key={kind}>
-              <i className={`legend-mark legend-mark--${kind}`}>
-                {KIND_MARKS[kind]}
-              </i>
-              {KIND_NAMES[kind]}
-            </span>
-          ),
-        )}
+        {[
+          "echo",
+          "relic",
+          "archive",
+          "council",
+          "oracle",
+          "key",
+          "rift",
+          "snare",
+        ].map((kind) => (
+          <span key={kind}>
+            <i className={`legend-mark legend-mark--${kind}`}>
+              {KIND_MARKS[kind]}
+            </i>
+            {KIND_NAMES[kind]}
+          </span>
+        ))}
       </div>
 
       {(room.fractureModifier || room.councilModifier) && (
@@ -508,6 +610,58 @@ export function Board({
           <span>{room.hazard.body}</span>
         </div>
       )}
+
+      {view && (
+        <div
+          aria-label="Table view"
+          className="board-view-controls"
+          role="group"
+        >
+          <button
+            aria-label="Turn the table left"
+            onClick={() => nudgeView(-0.32)}
+            type="button"
+          >
+            ⟲
+          </button>
+          <button
+            aria-label="Tilt the table down"
+            onClick={() => nudgeView(0, -0.12)}
+            type="button"
+          >
+            ⌃
+          </button>
+          <button
+            aria-label="Tilt the table up"
+            onClick={() => nudgeView(0, 0.12)}
+            type="button"
+          >
+            ⌄
+          </button>
+          <button
+            aria-label="Turn the table right"
+            onClick={() => nudgeView(0.32)}
+            type="button"
+          >
+            ⟳
+          </button>
+          <button
+            aria-label="Reset the table view"
+            className="board-view-reset"
+            onClick={() => {
+              view.resetView();
+              playCue("view");
+            }}
+            type="button"
+          >
+            ⌂
+          </button>
+        </div>
+      )}
+
+      {/* The decision you actually have to make belongs on the table, not
+          in a column beside it. */}
+      {decision && <div className="board-decision">{decision}</div>}
     </section>
   );
 }

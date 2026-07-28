@@ -442,7 +442,12 @@ test("human phase timeouts choose safe defaults and bot turns settle without wai
   beginGameV4(botRoom, host.token, 1_000);
   finishTurnV4(botRoom, 1_100);
   assert.equal(botRoom.players[botRoom.currentSeat].bot, true);
-  assert.equal(settleExpiredPhase(botRoom, 1_101, { rng: () => 0 }), true);
+  // Bot tempo: the bot holds its cast long enough for Witnesses to bet.
+  assert.equal(settleExpiredPhase(botRoom, 1_101, { rng: () => 0 }), false);
+  assert.equal(
+    settleExpiredPhase(botRoom, 1_100 + 6_100, { rng: () => 0 }),
+    true,
+  );
   assert.equal(botRoom.phase, "bend");
   assert.ok(botRoom.turn.intent);
 });
@@ -597,4 +602,29 @@ test("finished public state exposes a token-free Chronicle with decisive highlig
   assert.ok(state.chronicle.decisiveTurn);
   assert.ok(state.chronicle.highlights.length > 0);
   assert.equal(JSON.stringify(state.chronicle).includes("token-"), false);
+});
+
+test("quick tables fill to four masks and start in one command", () => {
+  const room = createRoomV4("QUICK", 100, undefined, { seed: 3 });
+  const host = seatPlayerV4(room, { name: "Solo", token: "solo-token" }, 100);
+  const { result } = executeGameCommand(
+    room,
+    "start_game",
+    { token: host.token, quickFill: true, seats: 4, commandId: "quick-1" },
+    { now: 1_000 },
+  );
+  assert.equal(result.status, "playing");
+  const seated = room.players.filter(Boolean);
+  assert.equal(seated.length, 4);
+  assert.equal(seated.filter((player) => player.bot).length, 3);
+  assert.equal(room.currentSeat, host.seat);
+  // Idempotent replay of the same command does not double-fill the table.
+  const replay = executeGameCommand(
+    room,
+    "start_game",
+    { token: host.token, quickFill: true, seats: 4, commandId: "quick-1" },
+    { now: 1_050 },
+  );
+  assert.equal(replay.duplicate, true);
+  assert.equal(room.players.filter(Boolean).length, 4);
 });

@@ -17,7 +17,27 @@ export type Choice = {
   label: string;
   result: string;
   burden?: { id: string; title: string };
+  projection?: string;
   [key: string]: unknown;
+};
+
+export type BindTargetDossier = {
+  seat: number;
+  name: string;
+  sigil: string;
+  maskId: string;
+  echoes: number;
+  resolve: number;
+  focus: number;
+  goldenThreads: number;
+  threadStrength: number;
+  qualified: boolean;
+  needs: { echoes: number; keys: number; circuits: number };
+};
+
+export type IntentPreviews = {
+  annotations: Record<Intent, Record<SpaceClass, string>>;
+  bindTargets: BindTargetDossier[];
 };
 
 export type ResourceDelta = {
@@ -195,6 +215,7 @@ export type TurnState = {
   ashArmed?: boolean;
   useAshEvent?: boolean;
   powerUsed?: string | null;
+  intentPreviews?: IntentPreviews;
 };
 
 export type Chronicle = {
@@ -243,6 +264,16 @@ export type RoomState = {
   turn?: TurnState | null;
   deadline: number | null;
   secondsLeft: number | null;
+  phaseBudgets?: Record<string, number>;
+  telemetry?: {
+    oxygen: {
+      windows: number;
+      priorityWindows: number;
+      rescues: number;
+      responseMsTotal: number;
+    };
+    witness: { submissions: number; correct: number; boldCorrect: number };
+  };
   pendingChoice: { id?: string; seat: number; event: GameEvent } | null;
   pendingCouncil: {
     id?: string;
@@ -263,6 +294,7 @@ export type RoomState = {
     class: SpaceClass;
     eligibleSeats: number[];
     helperSeat: number | null;
+    priority?: { seat: number; until: number } | null;
   } | null;
   signal: number;
   signalMax: number;
@@ -350,5 +382,9 @@ export type ServerReply = {
   reconnected?: boolean;
   resolved?: boolean;
   duplicate?: boolean;
+  alreadyResolved?: boolean;
+  retryable?: boolean;
+  settled?: boolean;
+  version?: number;
   state?: RoomState;
 };

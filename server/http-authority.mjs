@@ -102,6 +102,40 @@ async function insertRoom(db, room, now) {
   return 1;
 }
 
+export class VersionConflictError extends Error {
+  constructor() {
+    super("The table changed at the same moment.");
+    this.name = "VersionConflictError";
+    this.code = "version-conflict";
+  }
+}
+
+// Six seats can legally act in the same instant (Witness, Council, Oxygen).
+// The unluckiest writer may lose the compare-and-swap up to five times in a
+// full-table pileup, so the ceiling leaves margin beyond that worst case.
+const SAVE_RETRY_LIMIT = 8;
+
+// Messages that mean "another traveler legally got there first" — the losing
+// command should receive a calm already-resolved reply plus fresh state, not
+// a generic error.
+const ALREADY_RESOLVED_PATTERNS = [
+  /already reached the table/i,
+  /already spoken for the turn/i,
+  /already voted/i,
+  /already locked for this turn/i,
+  /already gave oxygen/i,
+  /no traveler can receive oxygen/i,
+  /no harmful event is waiting/i,
+  /no remaining harm to prevent/i,
+  /no council ballot is open/i,
+  /predictions close when the bone is cast/i,
+  /not legal during/i,
+];
+
+function isAlreadyResolved(message) {
+  return ALREADY_RESOLVED_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 async function saveRoom(db, room, version, now) {
   const result = await db
     .prepare(
@@ -110,7 +144,7 @@ async function saveRoom(db, room, version, now) {
     .bind(roomToJson(room), now + ROOM_TTL, now, room.code, version)
     .run();
   if (Number(result.meta?.changes || 0) !== 1) {
-    throw new Error("The table changed at the same moment. Try that move again.");
+    throw new VersionConflictError();
   }
   return version + 1;
 }
@@ -345,7 +379,27 @@ async function runAction(db, action, payload, now, env) {
     };
   }
 
-  const command = executeGameCommand(room, action, payload, { now });
+  let command;
+  try {
+    command = executeGameCommand(room, action, payload, { now });
+  } catch (error) {
+    if (error instanceof VersionConflictError) throw error;
+    // A rule rejection after (possibly) racing another traveler. Reload a
+    // clean snapshot — the in-memory room may hold partial mutations that
+    // were never saved — and answer with the current truth attached.
+    const message =
+      error instanceof Error ? error.message : "The table refused the move.";
+    const fresh = await loadRoom(db, code, now);
+    return {
+      ok: false,
+      protocol: "sixfold-road-http-v4",
+      code,
+      error: message,
+      alreadyResolved: isAlreadyResolved(message),
+      state: fresh ? publicRoomV4(fresh.room, now) : undefined,
+      version: fresh ? fresh.version : undefined,
+    };
+  }
   version = await saveRoom(db, room, version, now);
   return {
     ok: true,
@@ -382,7 +436,31 @@ export async function handleAuthorityRequest(request, env) {
     const action = String(body.action || "");
     const payload = body.payload || {};
     enforceRateLimit(request, action, payload, now);
-    const result = await runAction(env.DB, action, payload, now, env);
+    // Optimistic-concurrency conflicts are retried HERE, server-side, with
+    // the same command ID against freshly loaded state. Simultaneous Witness
+    // submissions, Council votes, and Oxygen races therefore each resolve
+    // exactly once without the browser ever seeing a version error.
+    let result;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        result = await runAction(env.DB, action, payload, Date.now(), env);
+        break;
+      } catch (error) {
+        if (!(error instanceof VersionConflictError)) throw error;
+        if (attempt >= SAVE_RETRY_LIMIT) {
+          return json(
+            request,
+            {
+              ok: false,
+              error:
+                "The table is very busy this instant. The move was not lost — try it again.",
+              retryable: true,
+            },
+            503,
+          );
+        }
+      }
+    }
     return json(request, result, result.ok === false ? 409 : 200);
   } catch (error) {
     return json(

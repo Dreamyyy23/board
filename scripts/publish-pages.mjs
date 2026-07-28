@@ -12,6 +12,17 @@ const publicAssetNames = [
   "og.png",
   "omen-sheet-v2.webp",
   "table-bg.webp",
+  "scene-fracture.webp",
+  "scene-final-orbit.webp",
+  "scene-victory.webp",
+  "scene-house-victory.webp",
+  "mask-sheet-v2.webp",
+  "omen-sheet-v3.webp",
+  "intent-sheet.webp",
+  "entry-hero.webp",
+  "board-medallion.webp",
+  "mask-sheet-v3.webp",
+  "intent-sheet-v2.webp",
 ];
 
 await rm(publishedAssets, { recursive: true, force: true });

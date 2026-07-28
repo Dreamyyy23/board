@@ -4,10 +4,19 @@ import crypto from "node:crypto";
 export const MAX_PLAYERS = 6;
 export const BOARD_SIZE = 36;
 export const TURN_MS = 61_000;
-export const BEND_MS = 5_000;
-export const REACTION_MS = 5_000;
+// A human has to read a fresh outcome and weigh three destinations; five
+// seconds tested as unplayable. Twelve keeps the pressure without the panic.
+export const BEND_MS = 12_000;
+export const REACTION_MS = 8_000;
+// Bots wait before acting so Witnesses actually get a window to bet against
+// them: without tempo a bot turn resolves in ~2s and the entire prediction
+// economy is invisible in solo play.
+export const BOT_INTENT_TEMPO_MS = 6_000;
+export const BOT_BEND_TEMPO_MS = 2_500;
+export const BOT_ORACLE_TEMPO_MS = 2_500;
 export const COUNCIL_REVEAL_MS = 650;
 export const FRACTURE_MS = 2_500;
+export const CROSSROADS_MS = 20_000;
 export const WIN_ECHOES = 13;
 export const SIGNAL_MAX = 12;
 export const RULES_VERSION = 4;
@@ -27,6 +36,7 @@ export const OMENS = Object.freeze([
 
 export const PHASES = Object.freeze({
   LOBBY: "lobby",
+  CROSSROADS: "crossroads",
   INTENT: "intent",
   BEND: "bend",
   REACTION: "reaction",
