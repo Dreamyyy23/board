@@ -106,3 +106,29 @@ test("social metadata is wired into both render targets", async () => {
   assert.match(pages, /\/board\/public\/og\.png/);
   assert.match(publisher, /"og\.png"/);
 });
+
+test("a published bundle can never strand visitors on a local authority", async () => {
+  const [config, client, scripts] = await Promise.all([
+    read("../vite.pages.config.ts"),
+    read("../app/game-client.tsx"),
+    read("../package.json"),
+  ]);
+
+  // This has broken the live site twice. A PowerShell session keeps
+  // `$env:` set until it closes, and HOW-TO-RUN tells you to set it for
+  // local play, so the next `npm run build:pages` in that window quietly
+  // publishes a bundle pointing at localhost.
+  assert.match(config, /BOARD_LOCAL_AUTHORITY/);
+  assert.match(config, /WARNING/);
+  assert.match(config, /NEXT_PUBLIC_FALLBACK_AUTHORITY/);
+
+  // And if one is published anyway, it has to heal itself rather than
+  // leaving every visitor looking at "the room authority is offline".
+  assert.match(client, /function resolveAuthority/);
+  assert.match(client, /NEXT_PUBLIC_FALLBACK_AUTHORITY/);
+  assert.match(client, /location\.hostname/);
+
+  // A local bundle should be one command, not a variable you must remember
+  // to unset afterwards.
+  assert.match(scripts, /"build:pages:local"/);
+});

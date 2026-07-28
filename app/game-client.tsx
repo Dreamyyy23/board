@@ -38,7 +38,42 @@ import type {
   SpaceClass,
 } from "./game-types";
 
-const SERVER_URL = process.env.NEXT_PUBLIC_GAME_SERVER_URL || "/api/authority";
+/**
+ * A bundle that was built while a local authority was configured will
+ * carry `http://localhost:3001` inside it. That is correct on the machine
+ * that built it and wrong everywhere else, and the failure is silent and
+ * remote: the page loads, the table never answers, and all anyone sees is
+ * "The room authority is offline."
+ *
+ * A loopback address can only ever be right when the page itself is being
+ * served from loopback. When it is not, prefer the production authority
+ * that is baked in alongside it, so a mistakenly-published bundle heals
+ * itself instead of stranding every visitor.
+ */
+function resolveAuthority() {
+  const configured =
+    process.env.NEXT_PUBLIC_GAME_SERVER_URL || "/api/authority";
+  const fallback = process.env.NEXT_PUBLIC_FALLBACK_AUTHORITY || "";
+  if (typeof window === "undefined" || !fallback) return configured;
+
+  const loopback =
+    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)([:/]|$)/i;
+  if (!loopback.test(configured)) return configured;
+
+  const servedLocally = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/i.test(
+    window.location.hostname,
+  );
+  if (servedLocally) return configured;
+
+  console.warn(
+    `[obscur] This bundle was built against ${configured} but is being served ` +
+      `from ${window.location.origin}. Falling back to the production ` +
+      `authority. Rebuild with \`npm run build:pages\` to fix it properly.`,
+  );
+  return fallback;
+}
+
+const SERVER_URL = resolveAuthority();
 const HTTP_AUTHORITY = SERVER_URL.endsWith("/api/authority");
 const SESSION_KEY = "obscur-sixfold-session";
 const DEFAULT_CHANNEL_URL = "https://www.youtube.com/@FoxyAlchemyStudio";

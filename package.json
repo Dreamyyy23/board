@@ -11,6 +11,7 @@
     "dev:server": "node --watch server/server.mjs",
     "build": "vinext build && node scripts/prune-sites-build.mjs",
     "build:pages": "vite build --config vite.pages.config.ts && node scripts/publish-pages.mjs",
+    "build:pages:local": "node scripts/build-pages-local.mjs",
     "simulate": "node scripts/simulate.mjs",
     "start": "vinext start",
     "start:server": "node server/server.mjs",
